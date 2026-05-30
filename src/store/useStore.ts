@@ -2,13 +2,14 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   Staff, ShiftPattern, ClassRoom, ShiftData,
-  LeaveRequest, OrgSettings,
+  LeaveRequest, OrgSettings, UISettings,
 } from '../types'
 
 interface AppState {
   currentRole: 'admin' | 'staff'
   currentStaffId: string | null
   orgSettings: OrgSettings
+  uiSettings: UISettings
   staff: Staff[]
   shiftPatterns: ShiftPattern[]
   classRooms: ClassRoom[]
@@ -17,6 +18,7 @@ interface AppState {
 
   setRole: (role: 'admin' | 'staff', staffId?: string) => void
   updateOrgSettings: (s: Partial<OrgSettings>) => void
+  updateUISettings: (s: Partial<UISettings>) => void
 
   addStaff: (s: Staff) => void
   updateStaff: (id: string, s: Partial<Staff>) => void
@@ -35,6 +37,14 @@ interface AppState {
 
   addLeaveRequest: (r: LeaveRequest) => void
   updateLeaveRequest: (id: string, r: Partial<LeaveRequest>) => void
+}
+
+const defaultUISettings: UISettings = {
+  theme: 'warm',
+  density: 'normal',
+  fontSize: 'medium',
+  showWeekends: true,
+  sidebarCollapsed: false,
 }
 
 const defaultPatterns: ShiftPattern[] = [
@@ -76,6 +86,7 @@ export const useStore = create<AppState>()(
         closeTime: '20:00',
         requestDeadline: 15,
       },
+      uiSettings: defaultUISettings,
       staff: defaultStaff,
       shiftPatterns: defaultPatterns,
       classRooms: defaultClassRooms,
@@ -84,6 +95,7 @@ export const useStore = create<AppState>()(
 
       setRole: (role, staffId) => set({ currentRole: role, currentStaffId: staffId ?? null }),
       updateOrgSettings: (s) => set((state) => ({ orgSettings: { ...state.orgSettings, ...s } })),
+      updateUISettings: (s) => set((state) => ({ uiSettings: { ...state.uiSettings, ...s } })),
 
       addStaff: (s) => set((state) => ({ staff: [...state.staff, s] })),
       updateStaff: (id, s) => set((state) => ({

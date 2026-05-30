@@ -75,3 +75,114 @@
 .animate-slide-up {
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
+
+/* テーマカラー CSS変数 */
+[data-theme="warm"] {
+  --color-primary: #f97316;
+  --color-primary-light: #fed7aa;
+}
+[data-theme="cool"] {
+  --color-primary: #0891b2;
+  --color-primary-light: #cffafe;
+}
+[data-theme="green"] {
+  --color-primary: #16a34a;
+  --color-primary-light: #dcfce7;
+}
+[data-theme="purple"] {
+  --color-primary: #7c3aed;
+  --color-primary-light: #ede9fe;
+}
+
+/* ========================================================
+   印刷用スタイル (@media print)
+   ======================================================== */
+@media print {
+  /* ページ設定 */
+  @page {
+    size: A3 landscape;
+    margin: 12mm 10mm;
+  }
+
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  /* サイドバー・モバイルナビ・エクスポートツールバー・モーダルを非表示 */
+  nav,
+  aside,
+  header,
+  .export-toolbar,
+  .print\:hidden,
+  [class*="fixed"],
+  [class*="animate-slide-up"] {
+    display: none !important;
+  }
+
+  /* メインコンテンツを全幅に */
+  main,
+  [role="main"],
+  .space-y-4 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* シフトテーブルの印刷調整 */
+  .shift-print-table {
+    width: 100% !important;
+    font-size: 8pt !important;
+    border-collapse: collapse !important;
+  }
+
+  .shift-print-table th,
+  .shift-print-table td {
+    border: 0.5pt solid #ccc !important;
+    padding: 2pt 3pt !important;
+  }
+
+  /* sticky列の印刷対応 */
+  .shift-print-table th.sticky,
+  .shift-print-table td.sticky {
+    position: static !important;
+  }
+
+  /* カードの影・角丸を除去 */
+  .card {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: 1pt solid #ddd !important;
+    overflow: visible !important;
+  }
+
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* 印刷ヘッダー表示 */
+  .print-header {
+    display: block !important;
+    margin-bottom: 8pt !important;
+  }
+
+  /* テキストサイズ調整 */
+  body {
+    font-size: 9pt !important;
+  }
+
+  /* 配置基準バナーの印刷調整 */
+  .bg-amber-50,
+  .bg-green-50 {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* カラーを強制出力 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

@@ -6,6 +6,7 @@ import StaffPage from './pages/StaffPage'
 import RequestsPage from './pages/RequestsPage'
 import MyRequestPage from './pages/MyRequestPage'
 import SettingsPage from './pages/SettingsPage'
+import SummaryPage from './pages/SummaryPage'
 import { useStore } from './store/useStore'
 
 function ProtectedAdmin({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,9 @@ export default function App() {
           } />
           <Route path="settings" element={
             <ProtectedAdmin><SettingsPage /></ProtectedAdmin>
+          } />
+          <Route path="summary" element={
+            <ProtectedAdmin><SummaryPage /></ProtectedAdmin>
           } />
           <Route path="my-request" element={<MyRequestPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

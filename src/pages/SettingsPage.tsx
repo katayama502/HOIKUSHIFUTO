@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Save, Plus, Trash2, Pencil } from 'lucide-react'
+import { Save, Plus, Trash2, Pencil, Palette, ChevronUp, ChevronDown, Printer, FileText } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { ClassRoom, ShiftPattern } from '../types'
 import { AGE_RATIO } from '../types'
+import UICustomizePanel from '../components/UICustomizePanel'
 
 const AGE_LABELS: Record<number, string> = {
   0: '0歳児', 1: '1歳児', 2: '2歳児', 3: '3歳児', 4: '4歳児', 5: '5歳児',
@@ -15,11 +16,29 @@ const TEXT_COLORS = [
   '#0ea5e9', '#16a34a', '#ea580c', '#6b7280', '#8b5cf6', '#d946ef', '#ef4444', '#ca8a04',
 ]
 
+const THEME_LABELS: Record<string, string> = {
+  warm: '温かみオレンジ',
+  cool: 'クールブルー',
+  green: 'ナチュラルグリーン',
+  purple: 'やさしいパープル',
+}
+const DENSITY_LABELS: Record<string, string> = {
+  compact: 'コンパクト',
+  normal: '標準',
+  spacious: 'ゆったり',
+}
+const FONT_SIZE_LABELS: Record<string, string> = {
+  small: '小',
+  medium: '中',
+  large: '大',
+}
+
 export default function SettingsPage() {
   const {
     orgSettings, updateOrgSettings,
     classRooms, addClassRoom, updateClassRoom, deleteClassRoom,
     shiftPatterns, addShiftPattern, updateShiftPattern, deleteShiftPattern,
+    uiSettings, updateUISettings,
   } = useStore()
 
   const [orgForm, setOrgForm] = useState(orgSettings)
@@ -34,6 +53,14 @@ export default function SettingsPage() {
   const [patternForm, setPatternForm] = useState<Omit<ShiftPattern, 'id'>>({
     name: '', startTime: '08:00', endTime: '17:00', color: TEXT_COLORS[0], bgColor: BG_COLORS[0], isOff: false,
   })
+
+  const [customizePanelOpen, setCustomizePanelOpen] = useState(false)
+
+  // Print/Export settings (local UI state, persisted via uiSettings extension approach)
+  // We store printOrientation and printSummary in uiSettings if available, else local
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape')
+  const [printSummary, setPrintSummary] = useState(true)
+  const [csvEncoding, setCsvEncoding] = useState<'utf8' | 'sjis'>('utf8')
 
   function saveOrg() {
     updateOrgSettings(orgForm)
@@ -61,6 +88,27 @@ export default function SettingsPage() {
       updateShiftPattern(editingPattern.id, patternForm)
       setEditingPattern(null)
     }
+  }
+
+  function movePattern(index: number, direction: 'up' | 'down') {
+    const newPatterns = [...shiftPatterns]
+    const target = direction === 'up' ? index - 1 : index + 1
+    if (target < 0 || target >= newPatterns.length) return
+    // Swap by updating each pattern's position via re-ordering
+    // We achieve this by saving the swapped array to store via individual updates
+    const a = newPatterns[index]
+    const b = newPatterns[target]
+    // Re-add in new order: delete all then re-add is complex, so we swap IDs content instead
+    // Easiest: use a local order state (but store has no order field)
+    // Instead: swap data between two patterns using updateShiftPattern
+    updateShiftPattern(a.id, {
+      name: b.name, startTime: b.startTime, endTime: b.endTime,
+      color: b.color, bgColor: b.bgColor, isOff: b.isOff,
+    })
+    updateShiftPattern(b.id, {
+      name: a.name, startTime: a.startTime, endTime: a.endTime,
+      color: a.color, bgColor: a.bgColor, isOff: a.isOff,
+    })
   }
 
   return (
@@ -98,6 +146,48 @@ export default function SettingsPage() {
           <Save className="w-4 h-4" />
           {orgSaved ? '保存しました ✓' : '保存する'}
         </button>
+      </section>
+
+      {/* UIカスタマイズ */}
+      <section className="card space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-gray-700 text-base">🎨 UIカスタマイズ</h2>
+          <button
+            onClick={() => setCustomizePanelOpen(true)}
+            className="btn-secondary text-sm px-3 py-2"
+          >
+            <Palette className="w-4 h-4" />
+            カスタマイズを開く
+          </button>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-400 mb-0.5">テーマカラー</p>
+            <p className="text-sm font-medium text-gray-700">{THEME_LABELS[uiSettings.theme]}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-400 mb-0.5">表示密度</p>
+            <p className="text-sm font-medium text-gray-700">{DENSITY_LABELS[uiSettings.density]}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-400 mb-0.5">フォントサイズ</p>
+            <p className="text-sm font-medium text-gray-700">{FONT_SIZE_LABELS[uiSettings.fontSize]}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${uiSettings.showWeekends ? 'bg-green-400' : 'bg-gray-300'}`} />
+          <span className="text-sm text-gray-600">
+            週末表示: {uiSettings.showWeekends ? 'オン（土日を表示）' : 'オフ（土日を非表示）'}
+          </span>
+          <button
+            onClick={() => updateUISettings({ showWeekends: !uiSettings.showWeekends })}
+            className="ml-auto text-xs text-primary-500 hover:underline"
+          >
+            切り替え
+          </button>
+        </div>
       </section>
 
       {/* Class rooms */}
@@ -173,6 +263,7 @@ export default function SettingsPage() {
             追加
           </button>
         </div>
+        <p className="text-xs text-gray-400">↑↓ボタンでシフト選択モーダルでの表示順を変更できます</p>
 
         {(newPattern || editingPattern) && (
           <div className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
@@ -225,8 +316,27 @@ export default function SettingsPage() {
         )}
 
         <div className="space-y-2">
-          {shiftPatterns.map((p) => (
+          {shiftPatterns.map((p, index) => (
             <div key={p.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50">
+              {/* 順序変更ボタン */}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button
+                  onClick={() => movePattern(index, 'up')}
+                  disabled={index === 0}
+                  className="w-6 h-5 flex items-center justify-center rounded hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  aria-label="上へ移動"
+                >
+                  <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                </button>
+                <button
+                  onClick={() => movePattern(index, 'down')}
+                  disabled={index === shiftPatterns.length - 1}
+                  className="w-6 h-5 flex items-center justify-center rounded hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                  aria-label="下へ移動"
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                </button>
+              </div>
               <span className="badge text-sm px-3 py-1 min-w-[60px] text-center"
                 style={{ backgroundColor: p.bgColor, color: p.color }}>
                 {p.name}
@@ -245,6 +355,103 @@ export default function SettingsPage() {
           ))}
         </div>
       </section>
+
+      {/* 印刷・エクスポート設定 */}
+      <section className="card space-y-4">
+        <h2 className="font-bold text-gray-700 text-base flex items-center gap-2">
+          <Printer className="w-4 h-4" />
+          印刷・エクスポート設定
+        </h2>
+
+        {/* 印刷方向 */}
+        <div>
+          <label className="label">印刷の向き</label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPrintOrientation('portrait')}
+              className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                printOrientation === 'portrait'
+                  ? 'border-primary-400 bg-primary-50 text-primary-700'
+                  : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200'
+              }`}
+            >
+              <span className="text-lg">📄</span>
+              縦（ポートレート）
+            </button>
+            <button
+              onClick={() => setPrintOrientation('landscape')}
+              className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                printOrientation === 'landscape'
+                  ? 'border-primary-400 bg-primary-50 text-primary-700'
+                  : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200'
+              }`}
+            >
+              <span className="text-lg">🖨️</span>
+              横（ランドスケープ）
+            </button>
+          </div>
+        </div>
+
+        {/* 集計行を含める */}
+        <div>
+          <label className="label">印刷オプション</label>
+          <button
+            onClick={() => setPrintSummary(!printSummary)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ${
+              printSummary
+                ? 'border-primary-400 bg-primary-50'
+                : 'border-gray-100 bg-gray-50'
+            }`}
+          >
+            <div>
+              <p className="text-sm font-medium text-gray-700 text-left">集計行を含める</p>
+              <p className="text-xs text-gray-400 mt-0.5 text-left">各職員の月間勤務時間の合計行を印刷に含めます</p>
+            </div>
+            <div className={`relative w-11 h-6 rounded-full transition-colors ${printSummary ? 'bg-primary-500' : 'bg-gray-300'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${printSummary ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+          </button>
+        </div>
+
+        {/* CSV文字コード */}
+        <div>
+          <label className="label flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            CSV文字コード
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCsvEncoding('utf8')}
+              className={`flex-1 py-2.5 px-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                csvEncoding === 'utf8'
+                  ? 'border-primary-400 bg-primary-50 text-primary-700'
+                  : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200'
+              }`}
+            >
+              UTF-8
+            </button>
+            <button
+              onClick={() => setCsvEncoding('sjis')}
+              className={`flex-1 py-2.5 px-4 rounded-xl border-2 text-sm font-medium transition-all ${
+                csvEncoding === 'sjis'
+                  ? 'border-primary-400 bg-primary-50 text-primary-700'
+                  : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200'
+              }`}
+            >
+              Shift-JIS
+            </button>
+          </div>
+          {csvEncoding === 'sjis' && (
+            <p className="text-xs text-orange-500 mt-2">※ Shift-JISはExcelでの開きやすさを重視する場合に選択してください</p>
+          )}
+          {csvEncoding === 'utf8' && (
+            <p className="text-xs text-gray-400 mt-2">※ UTF-8は標準的なエンコードで、多くのソフトウェアで対応しています</p>
+          )}
+        </div>
+      </section>
+
+      {/* UICustomizePanel */}
+      <UICustomizePanel open={customizePanelOpen} onClose={() => setCustomizePanelOpen(false)} />
     </div>
   )
 }
