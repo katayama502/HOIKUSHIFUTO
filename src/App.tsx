@@ -7,6 +7,8 @@ import RequestsPage from './pages/RequestsPage'
 import MyRequestPage from './pages/MyRequestPage'
 import SettingsPage from './pages/SettingsPage'
 import SummaryPage from './pages/SummaryPage'
+import ShiftCalendarPage from './pages/ShiftCalendarPage'
+import StaffConstraintPage from './pages/StaffConstraintPage'
 import { useStore } from './store/useStore'
 
 function ProtectedAdmin({ children }: { children: React.ReactNode }) {
@@ -33,6 +35,12 @@ export default function App() {
           } />
           <Route path="summary" element={
             <ProtectedAdmin><SummaryPage /></ProtectedAdmin>
+          } />
+          <Route path="shift-calendar" element={
+            <ProtectedAdmin><ShiftCalendarPage /></ProtectedAdmin>
+          } />
+          <Route path="staff-constraints" element={
+            <ProtectedAdmin><StaffConstraintPage /></ProtectedAdmin>
           } />
           <Route path="my-request" element={<MyRequestPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

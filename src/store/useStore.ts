@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   Staff, ShiftPattern, ClassRoom, ShiftData,
-  LeaveRequest, OrgSettings, UISettings,
+  LeaveRequest, OrgSettings, UISettings, StaffConstraint,
 } from '../types'
 
 interface AppState {
@@ -37,6 +37,10 @@ interface AppState {
 
   addLeaveRequest: (r: LeaveRequest) => void
   updateLeaveRequest: (id: string, r: Partial<LeaveRequest>) => void
+
+  staffConstraints: Record<string, StaffConstraint>
+  setStaffConstraint: (staffId: string, constraint: Partial<StaffConstraint>) => void
+  removeStaffConstraint: (staffId: string) => void
 }
 
 const defaultUISettings: UISettings = {
@@ -67,6 +71,8 @@ const defaultClassRooms: ClassRoom[] = [
   { id: 'c5', name: '5歳児クラス', ageGroup: 5, childrenCount: 20 },
 ]
 
+const defaultConstraints: Record<string, StaffConstraint> = {}
+
 const defaultStaff: Staff[] = [
   { id: 's1', name: '田中 花子', role: 'admin',  employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '主任' },
   { id: 's2', name: '鈴木 一郎', role: 'staff',  employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '' },
@@ -92,6 +98,7 @@ export const useStore = create<AppState>()(
       classRooms: defaultClassRooms,
       shifts: {},
       leaveRequests: [],
+      staffConstraints: defaultConstraints,
 
       setRole: (role, staffId) => set({ currentRole: role, currentStaffId: staffId ?? null }),
       updateOrgSettings: (s) => set((state) => ({ orgSettings: { ...state.orgSettings, ...s } })),
@@ -144,6 +151,31 @@ export const useStore = create<AppState>()(
       updateLeaveRequest: (id, r) => set((state) => ({
         leaveRequests: state.leaveRequests.map((req) => req.id === id ? { ...req, ...r } : req),
       })),
+
+      setStaffConstraint: (staffId, constraint) => set((state) => ({
+        staffConstraints: {
+          ...state.staffConstraints,
+          [staffId]: {
+            // 既存設定 or デフォルト値を先に展開し、新しい constraint で上書き
+            ...(state.staffConstraints[staffId] ?? {
+              availableDays: [1, 2, 3, 4, 5],
+              unavailableDates: [],
+              minDaysPerMonth: 0,
+              maxDaysPerMonth: 31,
+              preferredPatternIds: [],
+              maxConsecutiveDays: 5,
+            }),
+            ...constraint,
+            staffId,
+          },
+        },
+      })),
+
+      removeStaffConstraint: (staffId) => set((state) => {
+        const next = { ...state.staffConstraints }
+        delete next[staffId]
+        return { staffConstraints: next }
+      }),
     }),
     { name: 'hoiku-shift-store' }
   )

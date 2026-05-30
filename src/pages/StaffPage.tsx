@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, X, Save, Search, Copy, Users, Briefcase, Clock } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Pencil, Trash2, X, Save, Search, Copy, Users, Briefcase, Clock, SlidersHorizontal } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { Staff, Employment, Role } from '../types'
 import { STAFF_COLORS } from '../types'
@@ -218,6 +219,13 @@ export default function StaffPage() {
               {s.note && <p className="text-xs text-gray-400 mt-1 truncate">📝 {s.note}</p>}
             </div>
             <div className="flex gap-1 shrink-0">
+              <Link
+                to={`/staff-constraints?staffId=${s.id}`}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-green-50 active:bg-green-100 transition-colors"
+                title="出勤条件を設定"
+              >
+                <SlidersHorizontal className="w-4 h-4 text-green-400" />
+              </Link>
               <button
                 onClick={() => openCopy(s)}
                 className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-blue-50 active:bg-blue-100 transition-colors"

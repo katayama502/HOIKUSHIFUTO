@@ -74,3 +74,13 @@ export interface UISettings {
   showWeekends: boolean
   sidebarCollapsed: boolean
 }
+
+export interface StaffConstraint {
+  staffId: string
+  availableDays: number[]       // 0=日,1=月,...,6=土 (出勤可能な曜日)
+  unavailableDates: string[]    // YYYY-MM-DD 形式の出勤不可日（休み希望など）
+  minDaysPerMonth: number       // 月の最低出勤日数（0=制限なし）
+  maxDaysPerMonth: number       // 月の最大出勤日数（31=制限なし）
+  preferredPatternIds: string[] // 希望するシフトパターンID一覧
+  maxConsecutiveDays: number    // 最大連続勤務日数（デフォルト5）
+}
