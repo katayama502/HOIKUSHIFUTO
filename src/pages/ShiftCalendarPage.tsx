@@ -108,6 +108,8 @@ export default function ShiftCalendarPage() {
   const [mobileChipSheet, setMobileChipSheet] = useState<MobileChipSheetState | null>(null)
   // Pulse hint: when user taps cell without staff selected
   const [pulseStaffStrip, setPulseStaffStrip] = useState(false)
+  // Bottom tray expanded/collapsed (mobile)
+  const [trayExpanded, setTrayExpanded] = useState(false)
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false)
@@ -828,81 +830,6 @@ export default function ShiftCalendarPage() {
         </button>
       </div>
 
-      {/* ══════════════════ MOBILE STAFF STRIP (< md) ══════════════════ */}
-      <div
-        ref={staffStripRef}
-        className={`md:hidden shrink-0 bg-white border-b border-gray-100 transition-all ${pulseStaffStrip ? 'animate-pulse' : ''}`}
-      >
-        {/* Staff cards row */}
-        <div
-          className="flex gap-2 px-3 py-2 overflow-x-auto"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          {staff.map((s) => {
-            const isSelected = selectedStaffId === s.id
-            return (
-              <button
-                key={s.id}
-                onClick={() => setSelectedStaffId(isSelected ? null : s.id)}
-                className={`shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl border-2 transition-all active:scale-95 ${
-                  isSelected ? 'scale-105 shadow-md' : 'border-gray-100 bg-gray-50'
-                }`}
-                style={{
-                  borderColor: isSelected ? s.color : undefined,
-                  backgroundColor: isSelected ? s.color + '18' : undefined,
-                }}
-              >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: s.color }}
-                >
-                  {s.name[0]}
-                </div>
-                <span className="text-[10px] font-medium text-gray-700 leading-tight max-w-[48px] truncate">
-                  {s.name.split(/[\s　]/)[0]}
-                </span>
-                {isSelected && <Check className="w-3 h-3" style={{ color: s.color }} />}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Pattern selector row */}
-        <div
-          className="flex gap-1.5 px-3 pb-2 overflow-x-auto"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          <span className="shrink-0 text-xs text-gray-400 self-center">パターン:</span>
-          {shiftPatterns.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setActivePatternId(p.id)}
-              className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border-2 transition-all active:scale-95 ${
-                activePatternId === p.id ? 'scale-105 shadow-sm' : ''
-              }`}
-              style={{
-                backgroundColor: p.bgColor,
-                color: p.color,
-                borderColor: activePatternId === p.id ? p.color : 'transparent',
-              }}
-            >
-              {activePatternId === p.id && <Check className="w-2.5 h-2.5" />}
-              {p.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Selection hint */}
-        {selectedStaffId ? (
-          <div className="mx-3 mb-2 px-3 py-1.5 bg-primary-50 rounded-xl text-xs text-primary-700 font-medium border border-primary-200">
-            {staff.find((s) => s.id === selectedStaffId)?.name} を選択中 — 日付をタップして配置
-          </div>
-        ) : (
-          <div className="mx-3 mb-2 px-3 py-1.5 bg-gray-50 rounded-xl text-xs text-gray-400">
-            上から先生を選んでください
-          </div>
-        )}
-      </div>
 
       {/* ══════════════════ VIOLATION PANEL ══════════════════ */}
       {showViolations && (
@@ -1065,8 +992,8 @@ export default function ShiftCalendarPage() {
             ))}
           </div>
 
-          {/* Grid body (scrollable) */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Grid body (scrollable) — pb on mobile accounts for bottom tray (≈90px) + bottom nav (≈64px) */}
+          <div className="flex-1 overflow-y-auto pb-40 md:pb-0">
             {viewMode === 'month' ? (
               /* Monthly view */
               calendarGrid.map((week, wi) => (
@@ -1145,6 +1072,228 @@ export default function ShiftCalendarPage() {
       )}
 
       {/* ══════════════════ DESKTOP PATTERN CHANGE POPOVER ══════════════════ */}
+      {/* ══════════════════ MOBILE BOTTOM TRAY (< md) ══════════════════ */}
+      {/* Fixed above bottom nav. Collapsed = 90px compact strip. Expanded = 50vh drawer. */}
+      <div
+        ref={staffStripRef}
+        className={`md:hidden fixed left-0 right-0 z-[25] bg-white border-t-2 border-orange-100 shadow-[0_-4px_24px_rgba(0,0,0,0.10)] transition-all duration-300 ease-in-out ${pulseStaffStrip ? 'animate-pulse' : ''}`}
+        style={{
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 56px)',
+          height: trayExpanded ? '50vh' : '92px',
+        }}
+      >
+        {/* ── Drag handle / toggle ── */}
+        <button
+          onClick={() => setTrayExpanded((v) => !v)}
+          className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-20 h-7 bg-white border border-orange-100 rounded-full flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+          aria-label={trayExpanded ? 'トレイを閉じる' : 'トレイを開く'}
+        >
+          {trayExpanded
+            ? <ChevronDown className="w-4 h-4 text-gray-400" />
+            : <ChevronUp className="w-4 h-4 text-gray-400" />}
+        </button>
+
+        {/* ══ COLLAPSED VIEW ══ */}
+        {!trayExpanded && (
+          <div className="flex flex-col h-full justify-center">
+            {/* Row 1: Staff avatar chips (horizontal scroll) */}
+            <div
+              className="flex items-center gap-2 px-3 pt-2 pb-1 overflow-x-auto"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              {/* Selected indicator on the left */}
+              {selectedStaffId ? (
+                <div
+                  className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-xl text-xs font-medium border"
+                  style={{
+                    color: staff.find((s) => s.id === selectedStaffId)?.color,
+                    borderColor: staff.find((s) => s.id === selectedStaffId)?.color + '60',
+                    backgroundColor: staff.find((s) => s.id === selectedStaffId)?.color + '12',
+                  }}
+                >
+                  <Check className="w-3 h-3 shrink-0" />
+                  <span className="truncate max-w-[56px]">
+                    {staff.find((s) => s.id === selectedStaffId)?.name.split(/[\s　]/)[0]}
+                  </span>
+                </div>
+              ) : (
+                <span className="shrink-0 text-[10px] text-gray-400 whitespace-nowrap">先生を選択↓</span>
+              )}
+
+              {/* Staff circles */}
+              {staff.map((s) => {
+                const isSelected = selectedStaffId === s.id
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedStaffId(isSelected ? null : s.id)}
+                    className="shrink-0 relative flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+                  >
+                    <div
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center text-white text-sm font-bold transition-all"
+                      style={{
+                        backgroundColor: s.color,
+                        boxShadow: isSelected ? `0 0 0 3px ${s.color}55, 0 0 0 5px ${s.color}22` : undefined,
+                        transform: isSelected ? 'scale(1.1)' : undefined,
+                      }}
+                    >
+                      {s.name[0]}
+                    </div>
+                    {isSelected && (
+                      <div
+                        className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white flex items-center justify-center shadow"
+                        style={{ color: s.color }}
+                      >
+                        <Check className="w-2.5 h-2.5" />
+                      </div>
+                    )}
+                    <span className="text-[9px] text-gray-500 leading-tight max-w-[40px] truncate">
+                      {s.name.split(/[\s　]/)[0]}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Row 2: Pattern chips (horizontal scroll) */}
+            <div
+              className="flex items-center gap-1.5 px-3 pb-1.5 overflow-x-auto"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              {shiftPatterns.map((p) => {
+                const isActive = activePatternId === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setActivePatternId(p.id)}
+                    className="shrink-0 flex items-center gap-0.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold border-2 active:scale-95 transition-all"
+                    style={{
+                      backgroundColor: p.bgColor,
+                      color: p.color,
+                      borderColor: isActive ? p.color : 'transparent',
+                      transform: isActive ? 'scale(1.05)' : undefined,
+                    }}
+                  >
+                    {isActive && <Check className="w-2.5 h-2.5 shrink-0" />}
+                    {p.name}
+                    {!p.isOff && <span className="opacity-60 ml-0.5">{p.startTime?.slice(0, 5)}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ EXPANDED VIEW ══ */}
+        {trayExpanded && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 shrink-0">
+              <span className="text-sm font-bold text-gray-800">先生を選択してカレンダーに配置</span>
+              <button
+                onClick={() => setTrayExpanded(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-gray-100 active:scale-90 transition-all"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Staff grid (3 columns, scrollable) */}
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="grid grid-cols-3 gap-2">
+                {staff.map((s) => {
+                  const isSelected = selectedStaffId === s.id
+                  const status = getConstraintStatus(s.id)
+                  const borderDot =
+                    status === 'error' ? 'bg-red-400' :
+                    status === 'warning' ? 'bg-amber-400' : 'bg-green-400'
+                  // Monthly hours for this staff
+                  const monthEntries = shifts[yearMonth]?.[s.id] ?? {}
+                  const totalH = Object.values(monthEntries).reduce((sum, e) => {
+                    const p = shiftPatterns.find((p) => p.id === e.patternId)
+                    return sum + (p ? calcWorkHours(p) : 0)
+                  }, 0)
+                  const workDays = Object.values(monthEntries).filter((e) => {
+                    const p = shiftPatterns.find((p) => p.id === e.patternId)
+                    return p && !p.isOff
+                  }).length
+
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => { setSelectedStaffId(isSelected ? null : s.id); setTrayExpanded(false) }}
+                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-2 transition-all active:scale-95"
+                      style={{
+                        borderColor: isSelected ? s.color : '#f3f4f6',
+                        backgroundColor: isSelected ? s.color + '18' : '#f9fafb',
+                        boxShadow: isSelected ? `0 0 0 3px ${s.color}22` : undefined,
+                      }}
+                    >
+                      {/* Avatar + status dot */}
+                      <div className="relative">
+                        <div
+                          className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-base font-bold"
+                          style={{ backgroundColor: s.color }}
+                        >
+                          {s.name[0]}
+                        </div>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${borderDot}`} />
+                        {isSelected && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white flex items-center justify-center shadow" style={{ color: s.color }}>
+                            <Check className="w-3 h-3" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Name */}
+                      <span className="text-xs font-semibold text-gray-700 leading-tight text-center line-clamp-1">
+                        {s.name.split(/[\s　]/)[0]}
+                      </span>
+                      {/* Stats */}
+                      <span className="text-[9px] text-gray-400 leading-tight">
+                        {workDays}日 / {Math.round(totalH)}h
+                      </span>
+                      {/* Employment badge */}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${s.employment === 'fulltime' ? 'bg-sky-100 text-sky-600' : 'bg-violet-100 text-violet-600'}`}>
+                        {s.employment === 'fulltime' ? '正' : 'P'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Pattern selector pinned at bottom */}
+            <div className="shrink-0 border-t border-gray-100 px-3 py-2 bg-white">
+              <p className="text-[10px] text-gray-400 mb-1.5">ドラッグ / タップ時のシフトパターン:</p>
+              <div
+                className="flex gap-1.5 overflow-x-auto"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {shiftPatterns.map((p) => {
+                  const isActive = activePatternId === p.id
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setActivePatternId(p.id)}
+                      className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold border-2 active:scale-95 transition-all"
+                      style={{
+                        backgroundColor: p.bgColor,
+                        color: p.color,
+                        borderColor: isActive ? p.color : 'transparent',
+                      }}
+                    >
+                      {isActive && <Check className="w-3 h-3 shrink-0" />}
+                      <span>{p.name}</span>
+                      {!p.isOff && <span className="opacity-60">{p.startTime}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {popover && (
         <div
           ref={popoverRef}

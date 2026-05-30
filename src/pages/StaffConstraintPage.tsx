@@ -274,7 +274,7 @@ export default function StaffConstraintPage() {
           </div>
 
           {/* ────────── セクション1: 出勤可能曜日 ────────── */}
-          <section className="card p-5 space-y-3">
+          <section className="card p-4 md:p-5 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-primary-400 rounded-full" />
               <h2 className="font-bold text-gray-700 text-base">出勤可能曜日</h2>
@@ -310,7 +310,7 @@ export default function StaffConstraintPage() {
           </section>
 
           {/* ────────── セクション2: 月の出勤日数 ────────── */}
-          <section className="card p-5 space-y-4">
+          <section className="card p-4 md:p-5 space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-primary-400 rounded-full" />
               <h2 className="font-bold text-gray-700 text-base">月の出勤日数</h2>
@@ -369,7 +369,7 @@ export default function StaffConstraintPage() {
           </section>
 
           {/* ────────── セクション3: 連続勤務上限 ────────── */}
-          <section className="card p-5 space-y-3">
+          <section className="card p-4 md:p-5 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-primary-400 rounded-full" />
               <h2 className="font-bold text-gray-700 text-base">連続勤務上限</h2>
@@ -413,7 +413,7 @@ export default function StaffConstraintPage() {
           </section>
 
           {/* ────────── セクション4: 休み希望日 ────────── */}
-          <section className="card p-5 space-y-4">
+          <section className="card p-4 md:p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1 h-5 bg-primary-400 rounded-full" />
@@ -543,7 +543,7 @@ export default function StaffConstraintPage() {
           </section>
 
           {/* ────────── セクション5: 希望シフトパターン ────────── */}
-          <section className="card p-5 space-y-3">
+          <section className="card p-4 md:p-5 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-primary-400 rounded-full" />
               <h2 className="font-bold text-gray-700 text-base">希望するシフトパターン</h2>

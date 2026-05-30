@@ -95,6 +95,33 @@
 }
 
 /* ========================================================
+   モバイルUX改善 (mobile UX improvements)
+   ======================================================== */
+
+/* ダブルタップズームを防ぐ */
+button, a, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* スクロールのiOS対応 */
+.overflow-x-auto, .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ノッチ付きスマホのセーフエリア */
+@supports (padding: max(0px)) {
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .h-safe-bottom { height: max(env(safe-area-inset-bottom), 0px); }
+}
+
+/* モバイルのシフト表フォントサイズを縮小 */
+@media (max-width: 640px) {
+  .shift-scroll table {
+    font-size: 11px;
+  }
+}
+
+/* ========================================================
    印刷用スタイル (@media print)
    ======================================================== */
 @media print {
