@@ -221,7 +221,7 @@ export default function ShiftPage() {
       <div className="print:hidden">
         {/* タイトル行 + 月ナビ */}
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h1 className="text-xl font-bold text-gray-800 truncate">シフト表（一覧）</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-gray-800 truncate">シフト表（一覧）</h1>
 
           {/* 月 / 週 ナビ */}
           <div className="flex items-center gap-1 shrink-0">
@@ -270,45 +270,119 @@ export default function ShiftPage() {
         </div>
 
         {/* ---- 進捗統計バー ---- */}
-        <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2 shadow-sm mb-3">
-          {/* 入力率 */}
-          <div className="flex items-center gap-2 min-w-[160px]">
-            <span className="text-xs text-gray-500 whitespace-nowrap">入力率</span>
-            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${fillStats}%`,
-                  background: fillStats >= 80 ? '#22c55e' : fillStats >= 50 ? '#f59e0b' : '#ef4444',
-                }}
-              />
+        <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm mb-3">
+          {/* モバイル: 2列グリッド / デスクトップ: 横並び */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-x-5 sm:gap-y-2">
+            {/* 入力率 */}
+            <div className="col-span-2 flex items-center gap-2">
+              <span className="text-xs text-gray-500 whitespace-nowrap">入力率</span>
+              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${fillStats}%`,
+                    background: fillStats >= 80 ? '#22c55e' : fillStats >= 50 ? '#f59e0b' : '#ef4444',
+                  }}
+                />
+              </div>
+              <span className="text-xs font-bold text-gray-700 tabular-nums">{fillStats}%</span>
             </div>
-            <span className="text-xs font-bold text-gray-700 tabular-nums">{fillStats}%</span>
-          </div>
 
-          {/* 配置不足日数 */}
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                shortDaysCount > 0
-                  ? 'bg-red-100 text-red-600'
-                  : 'bg-green-100 text-green-600'
-              }`}
-            >
-              {shortDaysCount > 0 ? `配置不足: ${shortDaysCount}日` : '配置OK'}
-            </span>
-          </div>
+            {/* 配置不足日数 */}
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  shortDaysCount > 0
+                    ? 'bg-red-100 text-red-600'
+                    : 'bg-green-100 text-green-600'
+                }`}
+              >
+                {shortDaysCount > 0 ? `配置不足: ${shortDaysCount}日` : '配置OK'}
+              </span>
+            </div>
 
-          {/* 必要人数 */}
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <span className="bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full font-medium">
-              必要人数: {totalRequired}名/日
-            </span>
+            {/* 必要人数 */}
+            <div className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                必要: {totalRequired}名/日
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* ---- ツールバー ---- */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* ---- ツールバー（モバイル: アイコンのみ / デスクトップ: フルラベル） ---- */}
+        {/* モバイル用コンパクトツールバー */}
+        <div className="flex items-center gap-1.5 md:hidden">
+          {/* ビュー切り替え */}
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
+            <button
+              onClick={() => setViewMode('month')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                viewMode === 'month'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500'
+              }`}
+            >
+              月
+            </button>
+            <button
+              onClick={() => setViewMode('week')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                viewMode === 'week'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500'
+              }`}
+            >
+              週
+            </button>
+          </div>
+
+          {/* 一括入力 */}
+          <button
+            onClick={() => {
+              setQuickFill((v) => !v)
+              setQuickFillPatternId(null)
+            }}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors ${
+              quickFill
+                ? 'bg-amber-400 text-white border-amber-400 shadow-sm'
+                : 'bg-white text-gray-600 border-gray-200'
+            }`}
+            aria-label="一括入力"
+          >
+            <Zap className="w-4 h-4" />
+          </button>
+
+          {/* 前月コピー */}
+          <button
+            onClick={handlePrevMonthCopy}
+            className="w-9 h-9 flex items-center justify-center rounded-xl border bg-white text-gray-600 border-gray-200 transition-colors"
+            aria-label="前月コピー"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+
+          {/* CSV */}
+          <button
+            onClick={handleCSVDownload}
+            className="w-9 h-9 flex items-center justify-center rounded-xl border bg-white text-gray-600 border-gray-200 transition-colors"
+            aria-label="CSV出力"
+          >
+            <FileDown className="w-4 h-4" />
+          </button>
+
+          {/* 印刷 */}
+          <button
+            onClick={() => window.print()}
+            className="w-9 h-9 flex items-center justify-center rounded-xl border bg-white text-gray-600 border-gray-200 transition-colors"
+            aria-label="印刷"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* デスクトップ用フルツールバー */}
+        <div className="hidden md:flex flex-wrap items-center gap-2">
           {/* ビュー切り替え */}
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
             <button
@@ -388,10 +462,11 @@ export default function ShiftPage() {
       {/* ========== 一括入力バナー + パターンチップ ========== */}
       {quickFill && (
         <div className="print:hidden space-y-2">
-          <div className="flex items-center gap-3 bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-3 bg-amber-50 border-2 border-amber-300 rounded-2xl px-3 sm:px-4 py-3">
             <Zap className="w-4 h-4 text-amber-500 shrink-0" />
             <p className="text-xs font-semibold text-amber-700 flex-1">
-              ⚡ 一括入力モード中 — 先にパターンを選択してからセルをタップ
+              <span className="sm:hidden">パターンを選んでセルをタップ</span>
+              <span className="hidden sm:inline">⚡ 一括入力モード中 — 先にパターンを選択してからセルをタップ</span>
             </p>
             <button
               onClick={() => { setQuickFill(false); setQuickFillPatternId(null) }}
@@ -434,12 +509,12 @@ export default function ShiftPage() {
         <div className="overflow-x-auto shift-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
           <table
             className="border-collapse shift-print-table"
-            style={{ minWidth: `${130 + days.length * 46 + 60}px` }}
+            style={{ minWidth: `${90 + days.length * 38 + 52}px` }}
           >
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 {/* 職員名列ヘッダー */}
-                <th className="sticky left-0 z-10 bg-gray-50 text-left px-3 py-3 font-semibold text-gray-500 text-xs w-[130px] min-w-[130px] border-r border-gray-100">
+                <th className="sticky left-0 z-10 bg-gray-50 text-left px-2 py-3 font-semibold text-gray-500 text-xs w-[90px] min-w-[90px] sm:w-[130px] sm:min-w-[130px] sm:px-3 border-r border-gray-100">
                   職員名
                 </th>
 
@@ -453,7 +528,7 @@ export default function ShiftPage() {
                   return (
                     <th
                       key={`${ym}-${day}`}
-                      className={`text-center py-2 font-medium w-[46px] min-w-[46px] ${
+                      className={`text-center py-2 font-medium w-[38px] min-w-[38px] sm:w-[46px] sm:min-w-[46px] ${
                         isSunday
                           ? 'text-red-400'
                           : isSaturday
@@ -502,24 +577,26 @@ export default function ShiftPage() {
                   <tr key={s.id} className={rowBg}>
                     {/* 職員名（sticky left） */}
                     <td
-                      className={`sticky left-0 z-10 ${rowBgSticky} px-3 py-2 border-b border-gray-100 border-r border-r-gray-100`}
-                      style={{ minHeight: 52 }}
+                      className={`sticky left-0 z-10 ${rowBgSticky} px-2 sm:px-3 py-1.5 sm:py-2 border-b border-gray-100 border-r border-r-gray-100`}
+                      style={{ minHeight: 48 }}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
                         {/* アバター */}
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm"
+                          className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-[10px] sm:text-xs font-bold shrink-0 shadow-sm"
                           style={{ backgroundColor: s.color }}
                         >
                           {s.name[0]}
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold text-gray-800 leading-tight truncate max-w-[72px]">
-                            {s.name}
+                          <div className="text-[10px] sm:text-xs font-semibold text-gray-800 leading-tight truncate max-w-[48px] sm:max-w-[72px]">
+                            {/* モバイルでは名前の最初の部分のみ表示 */}
+                            <span className="sm:hidden">{s.name.split(/[\s　]/)[0]}</span>
+                            <span className="hidden sm:inline">{s.name}</span>
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              className={`text-[9px] sm:text-[10px] font-medium px-1 sm:px-1.5 py-0.5 rounded-full ${
                                 s.employment === 'fulltime'
                                   ? 'bg-indigo-50 text-indigo-600'
                                   : 'bg-orange-50 text-orange-500'
@@ -772,9 +849,9 @@ export default function ShiftPage() {
 
       {/* ========== トースト通知 ========== */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] print:hidden animate-slide-up">
+        <div className="fixed bottom-6 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[60] print:hidden animate-slide-up sm:w-auto max-w-xs mx-auto sm:mx-0">
           <div
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold text-white whitespace-nowrap ${
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold text-white ${
               toast.type === 'success'
                 ? 'bg-green-500'
                 : toast.type === 'error'

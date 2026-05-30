@@ -210,7 +210,7 @@ export default function StaffConstraintPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl mx-auto md:max-w-3xl">
+    <div className="space-y-4 md:space-y-5 max-w-2xl mx-auto md:max-w-3xl">
 
       {/* ページヘッダー */}
       <div className="flex items-start justify-between">
@@ -227,7 +227,7 @@ export default function StaffConstraintPage() {
       </div>
 
       {/* ────────── スタッフタブ ────────── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
         {staff.map((s) => (
           <button
             key={s.id}
@@ -480,7 +480,8 @@ export default function StaffConstraintPage() {
                       key={dateStr}
                       onClick={() => toggleUnavailableDate(day)}
                       disabled={isPast}
-                      className={`aspect-square rounded-xl text-xs font-medium transition-all duration-100 active:scale-90 flex flex-col items-center justify-center ${
+                      style={{ touchAction: 'manipulation', minHeight: 40, minWidth: 36 }}
+                      className={`aspect-square rounded-xl text-sm font-medium transition-all duration-100 active:scale-90 flex flex-col items-center justify-center ${
                         isUnavailable
                           ? 'bg-red-500 text-white shadow-sm'
                           : isPast

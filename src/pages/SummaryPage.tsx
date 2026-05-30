@@ -131,7 +131,7 @@ export default function SummaryPage() {
     <div className="space-y-4">
 
       {/* ヘッダー */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-800 truncate">勤怠サマリー</h1>
           <p className="text-xs text-gray-400 mt-0.5">月次の勤務実績まとめ</p>
@@ -193,11 +193,11 @@ export default function SummaryPage() {
 
       {/* サマリーテーブル */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ minWidth: 680 }}>
+        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <table className="w-full border-collapse" style={{ minWidth: 600 }}>
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-medium">
-                <th className="text-left px-4 py-3 w-[140px]">職員名</th>
+                <th className="sticky left-0 bg-gray-50 text-left px-4 py-3 w-[120px] z-10">職員名</th>
                 <th className="text-center px-3 py-3 w-[72px]">雇用</th>
                 <th className="text-center px-3 py-3 w-[72px]">勤務日数</th>
                 <th className="text-center px-3 py-3 w-[88px]">総勤務時間</th>
@@ -229,7 +229,7 @@ export default function SummaryPage() {
                 return (
                   <tr key={row.staff.id} className={`${rowBg} border-b border-gray-100 text-sm`}>
                     {/* 職員名 */}
-                    <td className="px-4 py-3">
+                    <td className={`sticky left-0 z-10 px-4 py-3 ${rowBg}`}>
                       <div className="flex items-center gap-2">
                         <div
                           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
@@ -332,7 +332,7 @@ export default function SummaryPage() {
             {summaryRows.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-100 border-t-2 border-gray-200 text-xs font-semibold text-gray-600">
-                  <td className="px-4 py-2" colSpan={2}>
+                  <td className="sticky left-0 z-10 bg-gray-100 px-4 py-2" colSpan={2}>
                     合計 / 平均 ({summaryRows.length}名)
                   </td>
                   <td className="text-center px-3 py-2">
