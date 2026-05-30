@@ -4,7 +4,6 @@ import Dashboard from './pages/Dashboard'
 import ShiftPage from './pages/ShiftPage'
 import StaffPage from './pages/StaffPage'
 import SettingsPage from './pages/SettingsPage'
-import SummaryPage from './pages/SummaryPage'
 import ShiftCalendarPage from './pages/ShiftCalendarPage'
 import StaffConstraintPage from './pages/StaffConstraintPage'
 
@@ -18,7 +17,6 @@ export default function App() {
           <Route path="shift" element={<ShiftPage />} />
           <Route path="staff" element={<StaffPage />} />
           <Route path="staff-constraints" element={<StaffConstraintPage />} />
-          <Route path="summary" element={<SummaryPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
