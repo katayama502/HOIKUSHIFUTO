@@ -3,19 +3,10 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import ShiftPage from './pages/ShiftPage'
 import StaffPage from './pages/StaffPage'
-import RequestsPage from './pages/RequestsPage'
-import MyRequestPage from './pages/MyRequestPage'
 import SettingsPage from './pages/SettingsPage'
 import SummaryPage from './pages/SummaryPage'
 import ShiftCalendarPage from './pages/ShiftCalendarPage'
 import StaffConstraintPage from './pages/StaffConstraintPage'
-import { useStore } from './store/useStore'
-
-function ProtectedAdmin({ children }: { children: React.ReactNode }) {
-  const { currentRole } = useStore()
-  if (currentRole !== 'admin') return <Navigate to="/" replace />
-  return <>{children}</>
-}
 
 export default function App() {
   return (
@@ -23,26 +14,12 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="shift-calendar" element={<ShiftCalendarPage />} />
           <Route path="shift" element={<ShiftPage />} />
-          <Route path="requests" element={
-            <ProtectedAdmin><RequestsPage /></ProtectedAdmin>
-          } />
-          <Route path="staff" element={
-            <ProtectedAdmin><StaffPage /></ProtectedAdmin>
-          } />
-          <Route path="settings" element={
-            <ProtectedAdmin><SettingsPage /></ProtectedAdmin>
-          } />
-          <Route path="summary" element={
-            <ProtectedAdmin><SummaryPage /></ProtectedAdmin>
-          } />
-          <Route path="shift-calendar" element={
-            <ProtectedAdmin><ShiftCalendarPage /></ProtectedAdmin>
-          } />
-          <Route path="staff-constraints" element={
-            <ProtectedAdmin><StaffConstraintPage /></ProtectedAdmin>
-          } />
-          <Route path="my-request" element={<MyRequestPage />} />
+          <Route path="staff" element={<StaffPage />} />
+          <Route path="staff-constraints" element={<StaffConstraintPage />} />
+          <Route path="summary" element={<SummaryPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

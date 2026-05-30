@@ -1,32 +1,24 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
-  Trash2, X, Filter,
+  Printer, Download, ChevronDown, ChevronUp, Check, X,
+  Copy,
 } from 'lucide-react'
-import { format, addMonths, subMonths, getDay, getDaysInMonth, parseISO } from 'date-fns'
+import { format, addMonths, subMonths, getDay, getDaysInMonth, parseISO, addWeeks, subWeeks } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
-import { calcWorkHours, getYearMonth } from '../utils/shift'
+import {
+  calcWorkHours, getYearMonth, getDaysArray,
+  generateShiftExcel, downloadFile,
+} from '../utils/shift'
+import { validateMonth } from '../utils/validation'
 import { AGE_RATIO } from '../types'
 import type { ShiftPattern } from '../types'
 
-// ─── StaffConstraint interface (added by Agent 2) ───────────────────────────
-interface StaffConstraint {
-  staffId: string
-  availableDays: number[]
-  unavailableDates: string[]
-  minDaysPerMonth: number
-  maxDaysPerMonth: number
-  preferredPatternIds: string[]
-}
-
-// ─── Drag payload type ───────────────────────────────────────────────────────
-interface DragPayload {
-  type: 'from-panel' | 'from-cell'
-  staffId: string
-  patternId: string
-  sourceDay?: string
-}
+// ─── Drag payload ─────────────────────────────────────────────────────────────
+type DragPayload =
+  | { type: 'from-rail'; staffId: string; patternId: string }
+  | { type: 'from-cell'; staffId: string; patternId: string; sourceYM: string; sourceDayStr: string }
 
 // ─── Popover state ────────────────────────────────────────────────────────────
 interface PopoverState {
@@ -44,8 +36,7 @@ function buildCalendarGrid(yearMonth: string): (Date | null)[][] {
   const base = parseISO(`${yearMonth}-01`)
   const daysInMonth = getDaysInMonth(base)
   const firstDow = getDay(base) // 0=Sun … 6=Sat
-  // convert to Mon-based offset (Mon=0 … Sun=6)
-  const offset = (firstDow + 6) % 7
+  const offset = (firstDow + 6) % 7 // Mon=0 … Sun=6
 
   const cells: (Date | null)[] = [
     ...Array(offset).fill(null),
@@ -55,7 +46,6 @@ function buildCalendarGrid(yearMonth: string): (Date | null)[][] {
       return d
     }),
   ]
-  // fill to multiple of 7
   while (cells.length % 7 !== 0) cells.push(null)
 
   const rows: (Date | null)[][] = []
@@ -63,16 +53,26 @@ function buildCalendarGrid(yearMonth: string): (Date | null)[][] {
   return rows
 }
 
-// ─── Constraint helpers ────────────────────────────────────────────────────
-function isUnavailableDate(constraint: StaffConstraint | undefined, dateStr: string): boolean {
-  if (!constraint) return false
-  return constraint.unavailableDates.includes(dateStr)
+// ─── Week days for weekly view (Mon start) ───────────────────────────────────
+function buildWeekDays(anchor: Date): Date[] {
+  const dow = anchor.getDay()
+  const monOffset = (dow + 6) % 7
+  const mon = new Date(anchor)
+  mon.setDate(anchor.getDate() - monOffset)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(mon)
+    d.setDate(mon.getDate() + i)
+    return d
+  })
 }
 
-function isUnavailableDay(constraint: StaffConstraint | undefined, date: Date): boolean {
-  if (!constraint) return false
-  const dow = date.getDay() // 0=Sun … 6=Sat
-  return !constraint.availableDays.includes(dow)
+// ─── Count working days in month (Mon–Fri) ───────────────────────────────────
+function countWorkingDays(yearMonth: string): number {
+  const days = getDaysArray(yearMonth)
+  return days.filter((d) => {
+    const dow = d.getDay()
+    return dow !== 0 && dow !== 6
+  }).length
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -81,24 +81,37 @@ export default function ShiftCalendarPage() {
     staff, shiftPatterns, shifts, classRooms,
     setShiftEntry, clearShiftEntry,
   } = useStore()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const staffConstraints: Record<string, StaffConstraint> = (useStore() as any).staffConstraints ?? {}
+  const staffConstraints = useStore((s) => s.staffConstraints) ?? {}
 
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null)
-  const [dragOverDay, setDragOverDay] = useState<string | null>(null)
-  const [popover, setPopover] = useState<PopoverState | null>(null)
-  const [filterMode, setFilterMode] = useState<'all' | 'constrained'>('all')
-  const [showViolations, setShowViolations] = useState(true)
-  const [selectedPatterns, setSelectedPatterns] = useState<Record<string, string>>({})
-  const popoverRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
+  const [weekAnchor, setWeekAnchor] = useState(new Date())
 
-  const yearMonth = getYearMonth(currentDate)
-  const calendarGrid = useMemo(() => buildCalendarGrid(yearMonth), [yearMonth])
+  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null)
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null)
+
+  const [activePatternId, setActivePatternId] = useState<string>(() => {
+    return shiftPatterns.find((p) => !p.isOff)?.id ?? shiftPatterns[0]?.id ?? ''
+  })
+
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)
+  const [popover, setPopover] = useState<PopoverState | null>(null)
+  const [showViolations, setShowViolations] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+
+  const popoverRef = useRef<HTMLDivElement>(null)
   const today = new Date()
   const todayStr = format(today, 'yyyy-MM-dd')
+
+  const yearMonth = getYearMonth(currentDate)
+  const ymMonth = Number(yearMonth.split('-')[1])
+
+  const prevYM = getYearMonth(subMonths(currentDate, 1))
+  const prevMonth = Number(prevYM.split('-')[1])
+
+  const monthLabel = format(currentDate, 'yyyy年M月', { locale: ja })
+  const calendarGrid = useMemo(() => buildCalendarGrid(yearMonth), [yearMonth])
+  const weekDays = useMemo(() => buildWeekDays(weekAnchor), [weekAnchor])
 
   const patternMap = useMemo(
     () => Object.fromEntries(shiftPatterns.map((p) => [p.id, p])),
@@ -110,7 +123,7 @@ export default function ShiftCalendarPage() {
     [classRooms]
   )
 
-  // Monthly stats per staff
+  // ─── Monthly stats per staff ─────────────────────────────────────────────
   const staffStats = useMemo(() => {
     const result: Record<string, { workDays: number; totalHours: number }> = {}
     for (const s of staff) {
@@ -130,12 +143,12 @@ export default function ShiftCalendarPage() {
     return result
   }, [staff, shifts, yearMonth, patternMap])
 
-  // Placement count per day
+  // ─── Placement counts per day ────────────────────────────────────────────
   const placementCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayStr = String(d)
+    const days = getDaysArray(yearMonth)
+    for (const d of days) {
+      const dayStr = String(d.getDate())
       counts[dayStr] = staff.filter((s) => {
         const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
         if (!entry) return false
@@ -146,171 +159,157 @@ export default function ShiftCalendarPage() {
     return counts
   }, [staff, shifts, yearMonth, patternMap])
 
-  // Unscheduled staff count
-  const unscheduledCount = useMemo(() => {
-    return staff.filter((s) => {
-      const stats = staffStats[s.id]
-      return !stats || stats.workDays === 0
-    }).length
-  }, [staff, staffStats])
-
-  // Constraint status for a staff member
-  function getConstraintStatus(staffId: string): 'ok' | 'warning' | 'error' {
-    const constraint = staffConstraints[staffId]
-    const stats = staffStats[staffId]
-    if (!constraint || !stats) return 'ok'
-    if (stats.workDays > constraint.maxDaysPerMonth) return 'error'
-    if (stats.workDays < constraint.minDaysPerMonth) {
-      // check if there's still time (days remaining in month)
-      const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
-      const remaining = daysInMonth - (today.getMonth() + 1 === currentDate.getMonth() + 1 && today.getFullYear() === currentDate.getFullYear()
-        ? today.getDate()
-        : daysInMonth)
-      if (remaining >= constraint.minDaysPerMonth - stats.workDays) return 'warning'
-      return 'error'
+  // ─── Progress: filled days ────────────────────────────────────────────────
+  const { filledDays, totalWorkingDays } = useMemo(() => {
+    const days = getDaysArray(yearMonth)
+    let filled = 0
+    for (const d of days) {
+      const dayStr = String(d.getDate())
+      if ((placementCounts[dayStr] ?? 0) >= totalRequired) filled++
     }
-    if (stats.workDays >= constraint.maxDaysPerMonth - 1) return 'warning'
+    return { filledDays: filled, totalWorkingDays: countWorkingDays(yearMonth) }
+  }, [yearMonth, placementCounts, totalRequired])
+
+  // ─── Violations ──────────────────────────────────────────────────────────
+  const violations = useMemo(
+    () => validateMonth(yearMonth, shifts, staff, shiftPatterns, classRooms, staffConstraints),
+    [yearMonth, shifts, staff, shiftPatterns, classRooms, staffConstraints]
+  )
+  const errorCount = violations.filter((v) => v.severity === 'error').length
+  const warningCount = violations.filter((v) => v.severity === 'warning').length
+
+  // ─── Constraint status for rail ──────────────────────────────────────────
+  function getConstraintStatus(staffId: string): 'ok' | 'warning' | 'error' {
+    const stats = staffStats[staffId]
+    if (!stats) return 'ok'
+    const staffViolations = violations.filter((v) => v.staffId === staffId)
+    if (staffViolations.some((v) => v.severity === 'error')) return 'error'
+    if (staffViolations.some((v) => v.severity === 'warning')) return 'warning'
     return 'ok'
   }
 
-  // Constraint check for a specific assignment
-  function getChipConstraintStatus(staffId: string, date: Date): 'ok' | 'unavailable-date' | 'unavailable-day' {
+  // ─── Chip constraint status ───────────────────────────────────────────────
+  function getChipConstraintStatus(staffId: string, date: Date, dayStr: string): 'ok' | 'warn' | 'error' {
     const dateStr = format(date, 'yyyy-MM-dd')
     const constraint = staffConstraints[staffId]
-    if (isUnavailableDate(constraint, dateStr)) return 'unavailable-date'
-    if (isUnavailableDay(constraint, date)) return 'unavailable-day'
+    if (!constraint) return 'ok'
+    if (constraint.unavailableDates.includes(dateStr)) return 'error'
+    if (constraint.availableDays.length > 0 && !constraint.availableDays.includes(date.getDay())) return 'warn'
+    const dayViolations = violations.filter((v) => v.staffId === staffId && v.day === dayStr)
+    if (dayViolations.some((v) => v.severity === 'error')) return 'error'
+    if (dayViolations.some((v) => v.severity === 'warning')) return 'warn'
     return 'ok'
   }
 
-  // Filter staff
-  const displayStaff = useMemo(() => {
-    if (filterMode === 'constrained') {
-      return staff.filter((s) => staffConstraints[s.id] !== undefined)
-    }
-    return staff
-  }, [staff, filterMode, staffConstraints])
-
-  // Default pattern for a staff member
-  function getDefaultPattern(staffId: string): string {
-    if (selectedPatterns[staffId]) return selectedPatterns[staffId]
+  // ─── Default pattern for staff ───────────────────────────────────────────
+  function getDefaultPatternForStaff(staffId: string): string {
     const constraint = staffConstraints[staffId]
     if (constraint?.preferredPatternIds?.length > 0) return constraint.preferredPatternIds[0]
     return shiftPatterns.find((p) => !p.isOff)?.id ?? shiftPatterns[0]?.id ?? ''
   }
 
-  // ─── Drag handlers ──────────────────────────────────────────────────────────
-  function handlePanelDragStart(e: React.DragEvent, staffId: string) {
-    const patternId = getDefaultPattern(staffId)
-    const payload: DragPayload = { type: 'from-panel', staffId, patternId }
-    setDragPayload(payload)
-    e.dataTransfer.setData('application/json', JSON.stringify(payload))
+  // ─── Drag handlers ────────────────────────────────────────────────────────
+  function handleRailDragStart(e: React.DragEvent, staffId: string) {
+    const patId = activePatternId || getDefaultPatternForStaff(staffId)
+    const payload: DragPayload = { type: 'from-rail', staffId, patternId: patId }
+    e.dataTransfer.setData('text/plain', JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'copy'
 
-    // Drag image: colored circle
-    const canvas = document.createElement('canvas')
-    canvas.width = 36; canvas.height = 36
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      const s = staff.find((st) => st.id === staffId)
-      ctx.beginPath()
-      ctx.arc(18, 18, 16, 0, Math.PI * 2)
-      ctx.fillStyle = s?.color ?? '#fb923c'
-      ctx.fill()
-      ctx.fillStyle = '#fff'
-      ctx.font = 'bold 16px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(s?.name?.[0] ?? '?', 18, 18)
-    }
-    e.dataTransfer.setDragImage(canvas, 18, 18)
+    const s = staff.find((st) => st.id === staffId)
+    const ghost = document.createElement('div')
+    ghost.style.cssText = `
+      width:36px;height:36px;border-radius:50%;
+      background:${s?.color ?? '#fb923c'};
+      display:flex;align-items:center;justify-content:center;
+      color:white;font-weight:bold;font-size:14px;
+      position:fixed;top:-100px;left:-100px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    `
+    ghost.textContent = s?.name?.[0] ?? '?'
+    document.body.appendChild(ghost)
+    e.dataTransfer.setDragImage(ghost, 18, 18)
+    setTimeout(() => { if (document.body.contains(ghost)) document.body.removeChild(ghost) }, 0)
+    setDragPayload(payload)
   }
 
-  function handleChipDragStart(e: React.DragEvent, staffId: string, day: string, patternId: string) {
+  function handleChipDragStart(e: React.DragEvent, staffId: string, patternId: string, sourceYM: string, sourceDayStr: string) {
     e.stopPropagation()
-    const payload: DragPayload = { type: 'from-cell', staffId, patternId, sourceDay: day }
-    setDragPayload(payload)
-    e.dataTransfer.setData('application/json', JSON.stringify(payload))
+    const payload: DragPayload = { type: 'from-cell', staffId, patternId, sourceYM, sourceDayStr }
+    e.dataTransfer.setData('text/plain', JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'move'
 
-    const canvas = document.createElement('canvas')
-    canvas.width = 36; canvas.height = 36
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      const s = staff.find((st) => st.id === staffId)
-      ctx.beginPath()
-      ctx.arc(18, 18, 16, 0, Math.PI * 2)
-      ctx.fillStyle = s?.color ?? '#fb923c'
-      ctx.fill()
-      ctx.fillStyle = '#fff'
-      ctx.font = 'bold 16px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(s?.name?.[0] ?? '?', 18, 18)
-    }
-    e.dataTransfer.setDragImage(canvas, 18, 18)
+    const s = staff.find((st) => st.id === staffId)
+    const ghost = document.createElement('div')
+    ghost.style.cssText = `
+      width:36px;height:36px;border-radius:50%;
+      background:${s?.color ?? '#fb923c'};
+      display:flex;align-items:center;justify-content:center;
+      color:white;font-weight:bold;font-size:14px;
+      position:fixed;top:-100px;left:-100px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    `
+    ghost.textContent = s?.name?.[0] ?? '?'
+    document.body.appendChild(ghost)
+    e.dataTransfer.setDragImage(ghost, 18, 18)
+    setTimeout(() => { if (document.body.contains(ghost)) document.body.removeChild(ghost) }, 0)
+    setDragPayload(payload)
   }
 
-  function handleCellDragOver(e: React.DragEvent, dayStr: string) {
+  function handleCellDragOver(e: React.DragEvent, cellKey: string) {
     e.preventDefault()
-    e.dataTransfer.dropEffect = dragPayload?.type === 'from-panel' ? 'copy' : 'move'
-    setDragOverDay(dayStr)
+    e.dataTransfer.dropEffect = dragPayload?.type === 'from-rail' ? 'copy' : 'move'
+    setDragOverKey(cellKey)
   }
 
-  function handleCellDrop(e: React.DragEvent, dayStr: string) {
+  function handleCellDrop(e: React.DragEvent, targetYM: string, targetDayStr: string) {
     e.preventDefault()
-    setDragOverDay(null)
+    setDragOverKey(null)
 
     let payload: DragPayload | null = null
     try {
-      payload = JSON.parse(e.dataTransfer.getData('application/json')) as DragPayload
+      payload = JSON.parse(e.dataTransfer.getData('text/plain')) as DragPayload
     } catch {
       payload = dragPayload
     }
     if (!payload) return
 
-    if (payload.type === 'from-panel') {
-      setShiftEntry(yearMonth, payload.staffId, dayStr, { patternId: payload.patternId, note: '' })
-    } else if (payload.type === 'from-cell' && payload.sourceDay) {
-      if (payload.sourceDay !== dayStr) {
-        // Move: copy to new day, clear old day
-        setShiftEntry(yearMonth, payload.staffId, dayStr, { patternId: payload.patternId, note: '' })
-        clearShiftEntry(yearMonth, payload.staffId, payload.sourceDay)
+    if (payload.type === 'from-cell') {
+      if (payload.sourceYM !== targetYM || payload.sourceDayStr !== targetDayStr) {
+        clearShiftEntry(payload.sourceYM, payload.staffId, payload.sourceDayStr)
       }
     }
+    setShiftEntry(targetYM, payload.staffId, targetDayStr, { patternId: payload.patternId, note: '' })
     setDragPayload(null)
   }
 
-  function handlePanelDrop(e: React.DragEvent) {
+  function handleRailDrop(e: React.DragEvent) {
     e.preventDefault()
-    setDragOverDay(null)
     let payload: DragPayload | null = null
     try {
-      payload = JSON.parse(e.dataTransfer.getData('application/json')) as DragPayload
+      payload = JSON.parse(e.dataTransfer.getData('text/plain')) as DragPayload
     } catch {
       payload = dragPayload
     }
-    if (!payload) return
-    // Drop on panel: remove if from-cell
-    if (payload.type === 'from-cell' && payload.sourceDay) {
-      clearShiftEntry(yearMonth, payload.staffId, payload.sourceDay)
+    if (payload?.type === 'from-cell') {
+      clearShiftEntry(payload.sourceYM, payload.staffId, payload.sourceDayStr)
     }
     setDragPayload(null)
+    setDragOverKey(null)
   }
 
   function handleDragEnd() {
-    setDragOverDay(null)
     setDragPayload(null)
+    setDragOverKey(null)
   }
 
   // ─── Popover ──────────────────────────────────────────────────────────────
   const openPopover = useCallback((e: React.MouseEvent, staffId: string, day: string) => {
     e.stopPropagation()
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    // Compute position, keep inside viewport
     let x = rect.right + 8
     let y = rect.top
-    if (x + 200 > window.innerWidth) x = rect.left - 208
-    if (y + 300 > window.innerHeight) y = window.innerHeight - 310
+    if (x + 220 > window.innerWidth) x = rect.left - 228
+    if (y + 320 > window.innerHeight) y = window.innerHeight - 330
     setPopover({ staffId, day, x, y })
   }, [])
 
@@ -326,7 +325,6 @@ export default function ShiftCalendarPage() {
     setPopover(null)
   }
 
-  // Close popover on outside click or Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setPopover(null) }
     function onMouseDown(e: MouseEvent) {
@@ -342,199 +340,428 @@ export default function ShiftCalendarPage() {
     }
   }, [])
 
-  // ─── Violation computation ─────────────────────────────────────────────────
-  const violations = useMemo(() => {
-    const list: { type: 'staff-max' | 'staff-min' | 'day-short'; message: string; severity: 'error' | 'warning' }[] = []
+  // ─── CSV export ───────────────────────────────────────────────────────────
+  function handleExportCSV() {
+    const days = getDaysArray(yearMonth)
+    const content = generateShiftExcel(yearMonth, staff, days, shifts, shiftPatterns)
+    downloadFile(content, `シフト表_${yearMonth}.csv`, 'text/csv;charset=utf-8')
+  }
+
+  // ─── Print ────────────────────────────────────────────────────────────────
+  function handlePrint() {
+    window.print()
+  }
+
+  // ─── Copy previous month ─────────────────────────────────────────────────
+  function handleCopyPrevMonth() {
+    const prevDays = getDaysArray(prevYM)
+    const curDays = getDaysArray(yearMonth)
+    const curDayNumbers = new Set(curDays.map((d) => d.getDate()))
 
     for (const s of staff) {
-      const constraint = staffConstraints[s.id]
-      const stats = staffStats[s.id]
-      if (!stats) continue
-      if (constraint) {
-        if (stats.workDays > constraint.maxDaysPerMonth) {
-          list.push({
-            type: 'staff-max',
-            message: `${s.name}: 今月 ${stats.workDays}日配置（上限${constraint.maxDaysPerMonth}日）`,
-            severity: 'error',
-          })
-        } else if (stats.workDays < constraint.minDaysPerMonth) {
-          list.push({
-            type: 'staff-min',
-            message: `${s.name}: 今月 ${stats.workDays}日配置（下限${constraint.minDaysPerMonth}日）`,
-            severity: 'warning',
-          })
+      const prevMonthData = shifts[prevYM]?.[s.id] ?? {}
+      for (const d of prevDays) {
+        const dayStr = String(d.getDate())
+        if (!curDayNumbers.has(d.getDate())) continue
+        const entry = prevMonthData[dayStr]
+        if (entry) {
+          setShiftEntry(yearMonth, s.id, dayStr, { patternId: entry.patternId, note: entry.note })
         }
       }
     }
+    setShowCopyModal(false)
+  }
 
-    const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayStr = String(d)
-      const count = placementCounts[dayStr] ?? 0
-      if (count > 0 && count < totalRequired) {
-        const date = parseISO(`${yearMonth}-${String(d).padStart(2, '0')}`)
-        const label = format(date, 'M/d（E）', { locale: ja })
-        list.push({
-          type: 'day-short',
-          message: `${label}: 配置人数 ${count}名（必要${totalRequired}名）`,
-          severity: 'error',
-        })
-      }
+  // ─── Render cell content ──────────────────────────────────────────────────
+  function renderDayCell(date: Date | null, colIndex: number, isWeekView = false) {
+    if (!date) {
+      return (
+        <div className="bg-gray-100/50 border-r last:border-r-0 border-gray-100 min-h-[110px]" />
+      )
     }
 
-    return list
-  }, [staff, staffConstraints, staffStats, placementCounts, totalRequired, yearMonth])
+    const dayStr = String(date.getDate())
+    const dateISO = format(date, 'yyyy-MM-dd')
+    const cellYM = getYearMonth(date)
+    const isInMonth = cellYM === yearMonth
+    const isToday = dateISO === todayStr
+    const isSaturday = colIndex === 5
+    const isSunday = colIndex === 6
+    const isWeekend = isSaturday || isSunday
+    const count = isInMonth ? (placementCounts[dayStr] ?? 0) : 0
+    const isUnderstaffed = isInMonth && count > 0 && count < totalRequired
+    const isOk = isInMonth && count >= totalRequired
+    const cellKey = `${cellYM}-${dayStr}`
+    const isDragTarget = dragOverKey === cellKey
 
-  const monthLabel = format(currentDate, 'yyyy年M月', { locale: ja })
+    // Staff placed on this day
+    const placedStaff = isInMonth
+      ? staff
+          .map((s) => {
+            const entry = shifts[cellYM]?.[s.id]?.[dayStr]
+            if (!entry) return null
+            const pattern = patternMap[entry.patternId]
+            if (!pattern) return null
+            return { staff: s, pattern, entry }
+          })
+          .filter((x): x is { staff: typeof staff[0]; pattern: ShiftPattern; entry: { patternId: string; note: string } } => x !== null)
+      : []
+
+    // Selected staff tint
+    const selectedStaff = selectedStaffId ? staff.find((s) => s.id === selectedStaffId) : null
+    const isSelectedStaffHere = isInMonth && selectedStaffId !== null &&
+      placedStaff.some((ps) => ps.staff.id === selectedStaffId)
+
+    let bgClass = ''
+    if (!isInMonth) bgClass = 'bg-gray-100/60'
+    else if (isDragTarget) bgClass = 'bg-primary-50 ring-2 ring-primary-300 ring-inset'
+    else if (isUnderstaffed) bgClass = 'bg-red-50'
+    else if (isWeekend) bgClass = isSunday ? 'bg-red-50/30' : 'bg-sky-50/30'
+    else if (count === 0) bgClass = 'bg-gray-50/60'
+
+    const minH = isWeekView ? 'min-h-[180px]' : 'min-h-[110px]'
+
+    return (
+      <div
+        className={`border-r last:border-r-0 border-gray-100 flex flex-col p-1.5 transition-colors relative ${minH} ${bgClass}`}
+        style={
+          isSelectedStaffHere && selectedStaff
+            ? { backgroundColor: selectedStaff.color + '18' }
+            : undefined
+        }
+        onDragOver={isInMonth ? (e) => handleCellDragOver(e, cellKey) : undefined}
+        onDragLeave={isInMonth ? () => setDragOverKey(null) : undefined}
+        onDrop={isInMonth ? (e) => handleCellDrop(e, cellYM, dayStr) : undefined}
+      >
+        {/* Date header row */}
+        <div className="flex items-center justify-between mb-1">
+          <span
+            className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full leading-none ${
+              isToday
+                ? 'bg-primary-500 text-white'
+                : isSunday ? 'text-red-500'
+                : isSaturday ? 'text-sky-600'
+                : 'text-gray-700'
+            }`}
+          >
+            {date.getDate()}
+          </span>
+
+          {/* Placement badge */}
+          {isInMonth && count > 0 && (
+            <span
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                isOk
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-600'
+              }`}
+            >
+              {count}/{totalRequired}
+              {isOk ? (
+                <Check className="w-2.5 h-2.5" />
+              ) : (
+                <ChevronUp className="w-2.5 h-2.5" />
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* Staff chips */}
+        <div className="flex flex-col gap-0.5 flex-1">
+          {placedStaff.map(({ staff: s, pattern }) => {
+            const chipStatus = getChipConstraintStatus(s.id, date, dayStr)
+            const isSelected = selectedStaffId === s.id
+
+            return (
+              <div
+                key={s.id}
+                draggable
+                onDragStart={(e) => handleChipDragStart(e, s.id, pattern.id, cellYM, dayStr)}
+                onDragEnd={handleDragEnd}
+                onClick={(e) => openPopover(e, s.id, dayStr)}
+                className={`group flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[9px] font-medium cursor-grab active:cursor-grabbing select-none transition-all hover:opacity-90 ${
+                  isSelected ? 'ring-2 ring-offset-0' : ''
+                } ${
+                  chipStatus === 'error' ? 'ring-1 ring-red-400' :
+                  chipStatus === 'warn' ? 'ring-1 ring-amber-400' : ''
+                }`}
+                style={{
+                  backgroundColor: pattern.bgColor,
+                  color: pattern.color,
+                  ...(isSelected ? { ringColor: s.color } : {}),
+                }}
+                title={`${s.name} — ${pattern.name}${chipStatus !== 'ok' ? '\n⚠ 制約違反あり' : ''}`}
+              >
+                {/* Avatar circle */}
+                <span
+                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                  style={{ backgroundColor: s.color, fontSize: 7 }}
+                >
+                  {s.name[0]}
+                </span>
+                {/* Name (first name only) */}
+                <span className="truncate max-w-[38px]">{s.name.split(/[\s　]/)[0]}</span>
+                {/* Pattern badge */}
+                <span
+                  className="shrink-0 text-[8px] font-bold px-0.5 rounded ml-0.5"
+                  style={{ backgroundColor: pattern.color + '33', color: pattern.color }}
+                >
+                  {pattern.name}
+                </span>
+                {/* Warning icon */}
+                {chipStatus !== 'ok' && (
+                  <AlertTriangle className="w-2.5 h-2.5 shrink-0 ml-auto opacity-70" />
+                )}
+                {/* Remove X (visible on hover) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    clearShiftEntry(cellYM, s.id, dayStr)
+                  }}
+                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto text-current hover:text-red-500"
+                  title="削除"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Progress bar width ───────────────────────────────────────────────────
+  const progressPct = totalWorkingDays > 0
+    ? Math.round((filledDays / totalWorkingDays) * 100)
+    : 0
+
+  // ─── Week label ───────────────────────────────────────────────────────────
+  const weekLabel = useMemo(() => {
+    const mon = weekDays[0]
+    const sun = weekDays[6]
+    return `${format(mon, 'M/d', { locale: ja })} 〜 ${format(sun, 'M/d（E）', { locale: ja })}`
+  }, [weekDays])
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full min-h-0" style={{ height: 'calc(100vh - 88px)' }}>
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 px-1 pb-3 shrink-0">
-        <div className="flex items-center gap-2">
+      {/* ══════════════════ TOP BAR ══════════════════ */}
+      <div className="shrink-0 bg-white border-b border-gray-100 px-4 py-2.5 flex flex-wrap items-center gap-3">
+
+        {/* Month navigation */}
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => setCurrentDate((d) => subMonths(d, 1))}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            onClick={() => { setCurrentDate((d) => subMonths(d, 1)); setWeekAnchor((d) => subMonths(d, 1)) }}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 active:scale-95 transition-all"
           >
             <ChevronLeft className="w-4 h-4 text-gray-600" />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 min-w-[100px] text-center">{monthLabel}</h1>
+          <h1 className="text-base font-bold text-gray-800 min-w-[96px] text-center">
+            {viewMode === 'week' ? weekLabel : monthLabel}
+          </h1>
           <button
-            onClick={() => setCurrentDate((d) => addMonths(d, 1))}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            onClick={() => { setCurrentDate((d) => addMonths(d, 1)); setWeekAnchor((d) => addMonths(d, 1)) }}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 active:scale-95 transition-all"
           >
             <ChevronRight className="w-4 h-4 text-gray-600" />
           </button>
+          {viewMode === 'week' && (
+            <>
+              <button
+                onClick={() => setWeekAnchor((d) => subWeeks(d, 1))}
+                className="ml-1 px-2 py-1 text-[11px] rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 transition-all"
+              >
+                先週
+              </button>
+              <button
+                onClick={() => setWeekAnchor((d) => addWeeks(d, 1))}
+                className="px-2 py-1 text-[11px] rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 transition-all"
+              >
+                翌週
+              </button>
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            今月
-          </button>
-          <button
-            onClick={() => setShowViolations((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors
-              ${violations.length > 0
-                ? 'bg-red-50 border-red-200 text-red-600'
-                : 'bg-green-50 border-green-200 text-green-600'
+
+        {/* Progress pill */}
+        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+          <div className="w-28 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                progressPct >= 100 ? 'bg-green-500' :
+                progressPct >= 60 ? 'bg-primary-400' : 'bg-amber-400'
               }`}
+              style={{ width: `${Math.min(progressPct, 100)}%` }}
+            />
+          </div>
+          <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
+            {filledDays}/{totalWorkingDays}日 入力済
+          </span>
+        </div>
+
+        {/* Violation badge */}
+        <button
+          onClick={() => setShowViolations((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            errorCount > 0
+              ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+              : warningCount > 0
+              ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
+              : 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
+          }`}
+        >
+          {errorCount > 0 || warningCount > 0 ? (
+            <AlertTriangle className="w-3.5 h-3.5" />
+          ) : (
+            <CheckCircle className="w-3.5 h-3.5" />
+          )}
+          {errorCount > 0
+            ? `⚠ ${errorCount + warningCount}件の問題`
+            : warningCount > 0
+            ? `⚠ ${warningCount}件の警告`
+            : '✓ 問題なし'
+          }
+          {showViolations
+            ? <ChevronUp className="w-3 h-3" />
+            : <ChevronDown className="w-3 h-3" />
+          }
+        </button>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* View toggle */}
+        <div className="flex bg-gray-100 rounded-xl p-0.5 text-[11px] font-medium">
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-3 py-1.5 rounded-[10px] transition-all ${viewMode === 'month' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            {violations.length > 0
-              ? <AlertTriangle className="w-3.5 h-3.5" />
-              : <CheckCircle className="w-3.5 h-3.5" />
-            }
-            {violations.length > 0 ? `${violations.length}件の違反` : '条件クリア'}
+            月
+          </button>
+          <button
+            onClick={() => { setViewMode('week'); setWeekAnchor(currentDate) }}
+            className={`px-3 py-1.5 rounded-[10px] transition-all ${viewMode === 'week' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            週
           </button>
         </div>
+
+        {/* Action buttons */}
+        <button
+          onClick={() => setShowCopyModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
+          title="前月のシフトをコピー"
+        >
+          <Copy className="w-3.5 h-3.5" />
+          前月コピー
+        </button>
+        <button
+          onClick={handleExportCSV}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
+        >
+          <Download className="w-3.5 h-3.5" />
+          CSV出力
+        </button>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
+        >
+          <Printer className="w-3.5 h-3.5" />
+          印刷
+        </button>
       </div>
 
-      {/* ── Violations panel ───────────────────────────────────────── */}
-      {showViolations && violations.length > 0 && (
-        <div className="mb-3 bg-white border border-red-100 rounded-2xl p-3 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-red-600 flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              制約違反・警告
-            </span>
-            <button onClick={() => setShowViolations(false)} className="text-gray-400 hover:text-gray-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="space-y-1 max-h-28 overflow-y-auto">
-            {violations.map((v, i) => (
-              <div
-                key={i}
-                className={`text-xs px-2 py-1 rounded-lg flex items-start gap-1.5 ${
-                  v.severity === 'error' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                }`}
-              >
-                <span className="mt-0.5 shrink-0">{v.severity === 'error' ? '🔴' : '🟡'}</span>
-                {v.message}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {showViolations && violations.length === 0 && (
-        <div className="mb-3 bg-green-50 border border-green-100 rounded-2xl px-4 py-2.5 shrink-0 flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-          <span className="text-xs text-green-700 font-medium">全ての条件をクリアしています</span>
+      {/* ══════════════════ VIOLATION PANEL ══════════════════ */}
+      {showViolations && (
+        <div className="shrink-0 bg-white border-b border-gray-100 px-4 py-3">
+          {violations.length === 0 ? (
+            <div className="flex items-center gap-2 text-green-700 text-xs">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="font-medium">全ての条件をクリアしています</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {violations.map((v) => (
+                <div
+                  key={v.id}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${
+                    v.severity === 'error' ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                  }`}
+                >
+                  <span>{v.severity === 'error' ? '🔴' : '🟡'}</span>
+                  {v.message}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── 2-panel layout ─────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 gap-4">
+      {/* ══════════════════ MAIN BODY ══════════════════ */}
+      <div className="flex flex-1 min-h-0">
 
-        {/* ── Staff Panel ──────────────────────────────────────────── */}
+        {/* ══ STAFF RAIL (left, 200px) ══ */}
         <div
-          ref={panelRef}
-          className="w-[220px] shrink-0 flex flex-col bg-white border border-orange-100 rounded-2xl overflow-hidden"
+          className="w-[200px] shrink-0 flex flex-col bg-white border-r border-gray-100 overflow-hidden"
           onDragOver={(e) => e.preventDefault()}
-          onDrop={handlePanelDrop}
+          onDrop={handleRailDrop}
         >
-          {/* Panel header */}
-          <div className="px-3 pt-3 pb-2 border-b border-orange-50 shrink-0">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-gray-700">先生を配置</span>
-              {unscheduledCount > 0 && (
-                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  未配置 {unscheduledCount}名
-                </span>
-              )}
-            </div>
-            {/* Filter toggle */}
-            <div className="flex bg-gray-100 rounded-xl p-0.5 text-[10px] font-medium">
-              <button
-                onClick={() => setFilterMode('all')}
-                className={`flex-1 py-1.5 rounded-[10px] transition-colors ${filterMode === 'all' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500'}`}
-              >
-                すべて
-              </button>
-              <button
-                onClick={() => setFilterMode('constrained')}
-                className={`flex-1 py-1.5 rounded-[10px] transition-colors flex items-center justify-center gap-0.5 ${filterMode === 'constrained' ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500'}`}
-              >
-                <Filter className="w-2.5 h-2.5" />
-                制約あり
-              </button>
-            </div>
+          {/* Rail header */}
+          <div className="px-3 pt-3 pb-2 border-b border-gray-100 shrink-0">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">スタッフ</p>
+            <p className="text-[10px] text-gray-400">カレンダーにドラッグして配置</p>
           </div>
 
-          {/* Staff cards (scrollable) */}
-          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
-            {displayStaff.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">職員がいません</p>
+          {/* Staff cards */}
+          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5">
+            {staff.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-6">職員がいません</p>
             )}
-            {displayStaff.map((s) => {
+            {staff.map((s) => {
               const stats = staffStats[s.id] ?? { workDays: 0, totalHours: 0 }
               const status = getConstraintStatus(s.id)
-              const defaultPat = getDefaultPattern(s.id)
-              const constraint = staffConstraints[s.id]
+              const isSelected = selectedStaffId === s.id
+
+              // Today's pattern
+              const todayEntry = shifts[yearMonth]?.[s.id]?.[String(today.getDate())]
+              const todayPattern = todayEntry ? patternMap[todayEntry.patternId] : null
 
               return (
                 <div
                   key={s.id}
                   draggable
-                  onDragStart={(e) => handlePanelDragStart(e, s.id)}
+                  onDragStart={(e) => handleRailDragStart(e, s.id)}
                   onDragEnd={handleDragEnd}
-                  className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 cursor-grab active:cursor-grabbing select-none hover:shadow-sm hover:border-orange-200 transition-all"
+                  onClick={() => setSelectedStaffId((prev) => prev === s.id ? null : s.id)}
+                  className={`relative border rounded-xl p-2 cursor-grab active:cursor-grabbing select-none transition-all hover:shadow-sm ${
+                    isSelected
+                      ? 'border-primary-300 bg-primary-50/50 shadow-sm'
+                      : 'border-gray-100 bg-gray-50 hover:border-orange-200'
+                  }`}
+                  style={
+                    status !== 'ok'
+                      ? {
+                          borderLeftWidth: 3,
+                          borderLeftColor:
+                            status === 'error' ? '#ef4444' : '#f59e0b',
+                        }
+                      : { borderLeftWidth: 3, borderLeftColor: '#22c55e' }
+                  }
                 >
-                  {/* Top row: avatar + name + status dot */}
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    {/* Avatar */}
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm"
                       style={{ backgroundColor: s.color }}
                     >
                       {s.name[0]}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-gray-700 truncate">{s.name}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                        <span className="text-[11px] font-semibold text-gray-700 truncate">{s.name}</span>
+                        <span className={`text-[9px] px-1 py-0.5 rounded-full font-bold shrink-0 ${
                           s.employment === 'fulltime' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
                         }`}>
                           {s.employment === 'fulltime' ? '正' : 'P'}
@@ -542,53 +769,63 @@ export default function ShiftCalendarPage() {
                       </div>
                       <div className="text-[10px] text-gray-400">{stats.workDays}日 / {stats.totalHours.toFixed(0)}h</div>
                     </div>
-                    {/* Constraint status dot */}
-                    {constraint && (
-                      <div
-                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          status === 'ok' ? 'bg-green-400' : status === 'warning' ? 'bg-amber-400' : 'bg-red-500'
-                        }`}
-                        title={
-                          status === 'ok' ? '制約OK' :
-                          status === 'warning' ? '制約に近づいています' : '制約違反'
-                        }
-                      />
-                    )}
                   </div>
-
-                  {/* Pattern selector */}
-                  <select
-                    value={defaultPat}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      e.stopPropagation()
-                      setSelectedPatterns((prev) => ({ ...prev, [s.id]: e.target.value }))
-                    }}
-                    className="w-full text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-primary-300 cursor-pointer"
-                    style={{ color: patternMap[defaultPat]?.color ?? '#374151' }}
-                  >
-                    {shiftPatterns.filter((p) => !p.isOff).map((p) => (
-                      <option key={p.id} value={p.id} style={{ color: p.color }}>
-                        {p.name} ({p.startTime})
-                      </option>
-                    ))}
-                  </select>
+                  {/* Today pattern badge */}
+                  {todayPattern && (
+                    <div
+                      className="mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-block"
+                      style={{ backgroundColor: todayPattern.bgColor, color: todayPattern.color }}
+                    >
+                      今日: {todayPattern.name}
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
+
+          {/* Active pattern selector */}
+          <div className="px-2 pb-3 pt-2 border-t border-gray-100 shrink-0">
+            <p className="text-[10px] font-semibold text-gray-500 mb-1.5">ドラッグ時のパターン：</p>
+            <div className="flex flex-wrap gap-1">
+              {shiftPatterns.filter((p) => !p.isOff).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setActivePatternId(p.id)}
+                  className={`relative text-[10px] font-bold px-2 py-1 rounded-lg transition-all border ${
+                    activePatternId === p.id
+                      ? 'ring-2 ring-offset-1 shadow-sm'
+                      : 'opacity-70 hover:opacity-100'
+                  }`}
+                  style={{
+                    backgroundColor: p.bgColor,
+                    color: p.color,
+                    borderColor: p.color + '55',
+                    ...(activePatternId === p.id ? { ringColor: p.color } : {}),
+                  }}
+                  title={`${p.name} ${p.startTime}–${p.endTime}`}
+                >
+                  {activePatternId === p.id && (
+                    <Check className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-white rounded-full" style={{ color: p.color }} />
+                  )}
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* ── Calendar Grid ─────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 flex flex-col bg-white border border-orange-100 rounded-2xl overflow-hidden">
-          {/* Day headers */}
+        {/* ══ CALENDAR GRID ══ */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white">
+
+          {/* Day-of-week header */}
           <div className="grid grid-cols-7 border-b border-gray-100 shrink-0">
             {DAY_NAMES.map((name, i) => (
               <div
                 key={name}
-                className={`py-2.5 text-center text-xs font-bold border-r last:border-r-0 border-gray-100 ${
-                  i === 5 ? 'text-blue-500 bg-blue-50/50' :
-                  i === 6 ? 'text-red-500 bg-red-50/50' :
+                className={`py-2 text-center text-xs font-bold border-r last:border-r-0 border-gray-100 ${
+                  i === 5 ? 'text-sky-600 bg-sky-50/60' :
+                  i === 6 ? 'text-red-500 bg-red-50/60' :
                   'text-gray-500'
                 }`}
               >
@@ -597,152 +834,41 @@ export default function ShiftCalendarPage() {
             ))}
           </div>
 
-          {/* Weeks (scrollable) */}
+          {/* Grid body (scrollable) */}
           <div className="flex-1 overflow-y-auto">
-            {calendarGrid.map((week, wi) => (
-              <div key={wi} className="grid grid-cols-7 border-b last:border-b-0 border-gray-100 min-h-[100px]">
-                {week.map((date, di) => {
-                  if (!date) {
-                    return (
-                      <div
-                        key={di}
-                        className="bg-gray-50 border-r last:border-r-0 border-gray-100"
-                      />
-                    )
-                  }
-                  const dayStr = String(date.getDate())
-                  const dateISO = format(date, 'yyyy-MM-dd')
-                  const isToday = dateISO === todayStr
-                  const isWeekend = di === 5 || di === 6
-                  const isSunday = di === 6
-                  const count = placementCounts[dayStr] ?? 0
-                  const isUnderstaffed = count > 0 && count < totalRequired
-                  const isFullyStaffed = count >= totalRequired
-                  const isDragTarget = dragOverDay === dayStr
-
-                  // Staff placed on this day
-                  const placedStaff = staff
-                    .map((s) => {
-                      const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-                      if (!entry) return null
-                      const pattern = patternMap[entry.patternId]
-                      if (!pattern) return null
-                      return { staff: s, pattern, entry }
-                    })
-                    .filter(Boolean) as { staff: typeof staff[0]; pattern: ShiftPattern; entry: { patternId: string; note: string } }[]
-
-                  return (
-                    <div
-                      key={di}
-                      className={`border-r last:border-r-0 border-gray-100 p-1 flex flex-col gap-0.5 transition-colors
-                        ${isDragTarget ? 'ring-2 ring-inset ring-primary-400 bg-primary-50/30' : ''}
-                        ${!isDragTarget && isUnderstaffed ? 'bg-red-50/60' : ''}
-                        ${!isDragTarget && isFullyStaffed && count > 0 ? 'bg-green-50/30' : ''}
-                        ${!isDragTarget && !isUnderstaffed && !isFullyStaffed && isWeekend ? (isSunday ? 'bg-red-50/20' : 'bg-blue-50/20') : ''}
-                      `}
-                      onDragOver={(e) => handleCellDragOver(e, dayStr)}
-                      onDragLeave={() => setDragOverDay(null)}
-                      onDrop={(e) => handleCellDrop(e, dayStr)}
-                    >
-                      {/* Date number */}
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`text-xs font-bold leading-none px-1 py-0.5 rounded-full w-6 h-6 flex items-center justify-center ${
-                            isToday
-                              ? 'bg-primary-500 text-white'
-                              : isSunday ? 'text-red-500'
-                              : di === 5 ? 'text-blue-500'
-                              : 'text-gray-700'
-                          }`}
-                        >
-                          {date.getDate()}
-                        </span>
-                        {/* Placement count badge */}
-                        {count > 0 && (
-                          <span
-                            className={`text-[9px] font-bold px-1 rounded-full ${
-                              isUnderstaffed ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'
-                            }`}
-                          >
-                            {count}/{totalRequired}名
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Placed staff chips */}
-                      <div className="flex flex-col gap-0.5 flex-1">
-                        {placedStaff.map(({ staff: s, pattern }) => {
-                          const chipStatus = getChipConstraintStatus(s.id, date)
-                          const hasWarning = chipStatus !== 'ok'
-                          return (
-                            <div
-                              key={s.id}
-                              draggable
-                              onDragStart={(e) => handleChipDragStart(e, s.id, dayStr, pattern.id)}
-                              onDragEnd={handleDragEnd}
-                              onClick={(e) => openPopover(e, s.id, dayStr)}
-                              onContextMenu={(e) => {
-                                e.preventDefault()
-                                clearShiftEntry(yearMonth, s.id, dayStr)
-                              }}
-                              className={`flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[9px] font-medium cursor-grab active:cursor-grabbing select-none transition-all hover:opacity-80
-                                ${hasWarning ? (chipStatus === 'unavailable-date' ? 'ring-1 ring-red-400' : 'ring-1 ring-amber-400') : ''}
-                              `}
-                              style={{
-                                backgroundColor: pattern.bgColor,
-                                color: pattern.color,
-                              }}
-                              title={`${s.name} — ${pattern.name}${hasWarning ? '\n⚠️ 制約違反' : ''}`}
-                            >
-                              {/* Avatar */}
-                              <span
-                                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold shrink-0"
-                                style={{ backgroundColor: s.color, fontSize: 7 }}
-                              >
-                                {s.name[0]}
-                              </span>
-                              <span className="truncate max-w-[40px]">{s.name.split(' ')[0]}</span>
-                              {/* Pattern badge */}
-                              <span
-                                className="shrink-0 text-[8px] font-bold px-0.5 rounded"
-                                style={{ backgroundColor: pattern.color + '33', color: pattern.color }}
-                              >
-                                {pattern.name}
-                              </span>
-                              {/* Warning indicator */}
-                              {hasWarning && <span className="shrink-0 text-[8px]">⚠</span>}
-                              {/* Remove button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  clearShiftEntry(yearMonth, s.id, dayStr)
-                                }}
-                                className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity text-current"
-                              >
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
+            {viewMode === 'month' ? (
+              /* Monthly view */
+              calendarGrid.map((week, wi) => (
+                <div key={wi} className="grid grid-cols-7 border-b last:border-b-0 border-gray-100">
+                  {week.map((date, di) => (
+                    <div key={di}>
+                      {renderDayCell(date, di, false)}
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
+              ))
+            ) : (
+              /* Weekly view */
+              <div className="grid grid-cols-7 h-full">
+                {weekDays.map((date, di) => (
+                  <div key={di}>
+                    {renderDayCell(date, di, true)}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── Pattern-change Popover ──────────────────────────────────── */}
+      {/* ══════════════════ PATTERN CHANGE POPOVER ══════════════════ */}
       {popover && (
         <div
           ref={popoverRef}
-          className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 w-52"
+          className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 w-56"
           style={{ left: popover.x, top: popover.y }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-bold text-gray-700">
               {staff.find((s) => s.id === popover.staffId)?.name} — {popover.day}日
             </span>
@@ -751,8 +877,7 @@ export default function ShiftCalendarPage() {
             </button>
           </div>
 
-          {/* Pattern buttons */}
-          <div className="grid grid-cols-2 gap-1.5 mb-2">
+          <div className="grid grid-cols-2 gap-1.5 mb-2.5">
             {shiftPatterns.map((p) => {
               const isCurrent = shifts[yearMonth]?.[popover.staffId]?.[popover.day]?.patternId === p.id
               return (
@@ -765,20 +890,51 @@ export default function ShiftCalendarPage() {
                   style={{ backgroundColor: p.bgColor, color: p.color, borderColor: p.color + '55' }}
                 >
                   {p.name}
-                  {!p.isOff && <div className="text-[9px] opacity-70">{p.startTime}</div>}
+                  {!p.isOff && <div className="text-[9px] opacity-70 mt-0.5">{p.startTime}</div>}
                 </button>
               )
             })}
           </div>
 
-          {/* Delete button */}
           <button
             onClick={handlePopoverDelete}
             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-red-500 bg-red-50 border border-red-100 hover:bg-red-100 active:scale-95 transition-all"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5" />
             削除
           </button>
+        </div>
+      )}
+
+      {/* ══════════════════ COPY PREVIOUS MONTH MODAL ══════════════════ */}
+      {showCopyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 w-80 mx-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Copy className="w-5 h-5 text-primary-500" />
+              <h2 className="text-base font-bold text-gray-800">前月シフトをコピー</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">
+              {prevMonth}月のシフトを{ymMonth}月にコピーします。
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              現在の{ymMonth}月のシフトは上書きされます。
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCopyModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 hover:bg-gray-100 active:scale-95 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleCopyPrevMonth}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-primary-500 hover:bg-primary-600 active:scale-95 transition-all shadow-sm"
+              >
+                コピーする
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

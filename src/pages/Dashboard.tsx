@@ -1,8 +1,8 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  CalendarDays, Users, ClipboardList, AlertTriangle,
-  Clock, ChevronRight, TrendingUp, Printer, Sun,
+  CalendarDays, Users, AlertTriangle,
+  ChevronRight, TrendingUp, Printer, Sun, LayoutGrid, BarChart3,
 } from 'lucide-react'
 import { format, getDaysInMonth, parseISO, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -10,14 +10,16 @@ import { useStore } from '../store/useStore'
 import { getYearMonth, calcMonthlyHours } from '../utils/shift'
 
 export default function Dashboard() {
-  const { staff, shifts, shiftPatterns, leaveRequests, currentRole, currentStaffId, orgSettings } = useStore()
+  const { staff, shifts, shiftPatterns, orgSettings } = useStore()
   const today = new Date()
   const yearMonth = getYearMonth(today)
-  const monthLabel = format(today, 'M月', { locale: ja })
   const fullMonthLabel = format(today, 'yyyy年M月', { locale: ja })
+  const todayLabel = format(today, 'yyyy年M月d日（E）', { locale: ja })
 
-  const pendingRequests = leaveRequests.filter((r) => r.status === 'pending')
+  const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
+  const todayDay = String(today.getDate())
 
+  // 職員別勤務時間
   const staffHours = useMemo(() =>
     staff.map((s) => ({
       ...s,
@@ -25,17 +27,6 @@ export default function Dashboard() {
     })),
     [staff, shifts, shiftPatterns, yearMonth]
   )
-
-  const overStaff = staffHours.filter((s) => (s.hours / 4) > 40)
-  const myData = staffHours.find((s) => s.id === currentStaffId)
-  const myHours = myData?.hours ?? 0
-  const myShiftsThisMonth = Object.keys(shifts[yearMonth]?.[currentStaffId ?? ''] ?? {}).length
-  const myRequests = leaveRequests.filter((r) => r.staffId === currentStaffId)
-
-  // 今日のシフト確認
-  const todayDay = String(today.getDate())
-  const myTodayEntry = shifts[yearMonth]?.[currentStaffId ?? '']?.[todayDay]
-  const myTodayPattern = myTodayEntry ? shiftPatterns.find((p) => p.id === myTodayEntry.patternId) : null
 
   // 今日出勤している職員
   const todayWorkingStaff = useMemo(() => {
@@ -46,8 +37,7 @@ export default function Dashboard() {
     }).filter((s) => s.pattern && !s.pattern.isOff)
   }, [staff, shifts, shiftPatterns, yearMonth, todayDay])
 
-  // 今月の日別シフト登録件数（ミニカレンダー用）
-  const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
+  // 日別シフト登録状況
   const dailyShiftCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     for (let d = 1; d <= daysInMonth; d++) {
@@ -63,17 +53,56 @@ export default function Dashboard() {
     return counts
   }, [staff, shifts, shiftPatterns, yearMonth, daysInMonth])
 
+  // Key metrics
+  const staffCount = staff.length
+
+  // 今月シフト入力率: 各職員 × 各日で埋まっているセル / 総セル数
+  const totalCells = staffCount * daysInMonth
+  const filledCells = useMemo(() => {
+    let count = 0
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = String(d)
+      staff.forEach((s) => {
+        if (shifts[yearMonth]?.[s.id]?.[dayStr]) count++
+      })
+    }
+    return count
+  }, [staff, shifts, yearMonth, daysInMonth])
+  const fillRate = totalCells > 0 ? Math.round((filledCells / totalCells) * 100) : 0
+
+  // 配置不足日数: 1名以上いるが staff.length より少ない日（簡易: 出勤者0の日は未入力として除外）
+  const shortDays = useMemo(() => {
+    let count = 0
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = String(d)
+      const working = Object.values(dailyShiftCounts).length > 0 ? (dailyShiftCounts[dayStr] ?? 0) : 0
+      // 配置不足 = 出勤者が1名以上かつ半数未満
+      if (working > 0 && working < Math.ceil(staffCount / 2)) count++
+    }
+    return count
+  }, [dailyShiftCounts, daysInMonth, staffCount])
+
+  // 有効シフト日数: 1名以上出勤している日
+  const activeDays = useMemo(() => {
+    let count = 0
+    for (let d = 1; d <= daysInMonth; d++) {
+      if ((dailyShiftCounts[String(d)] ?? 0) > 0) count++
+    }
+    return count
+  }, [dailyShiftCounts, daysInMonth])
+
+  // あと何日分入力が必要か（未入力の日 = 出勤者0の日）
+  const unfilledDays = daysInMonth - activeDays
+  const allFilled = unfilledDays === 0
+
   return (
     <div className="space-y-5 max-w-2xl mx-auto md:max-w-none">
 
-      {/* あいさつヘッダー */}
-      <div className="flex items-center justify-between">
+      {/* Row 1 — ヘッダー */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            {currentRole === 'admin' ? 'こんにちは！' : `こんにちは、${myData?.name?.split(' ')[0] ?? ''}さん`}
-            <span className="text-base">{currentRole === 'admin' ? '👩‍💼' : '🌸'}</span>
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">{fullMonthLabel} — {orgSettings.name}</p>
+          <h1 className="text-xl font-bold text-gray-800">{orgSettings.name}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{todayLabel}</p>
         </div>
         <button
           onClick={() => window.print()}
@@ -85,233 +114,164 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {currentRole === 'admin' ? (
-        <>
-          {/* アラート（優先表示） */}
-          {(pendingRequests.length > 0 || overStaff.length > 0) && (
-            <div className="space-y-2">
-              {pendingRequests.length > 0 && (
-                <Link to="/requests">
-                  <div className="flex items-center gap-3 px-4 py-3.5 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 active:scale-[0.99] transition-all duration-100">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-amber-800">未処理の申請が {pendingRequests.length} 件あります</p>
-                      <p className="text-xs text-amber-600">タップして確認する</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-amber-400 shrink-0" />
-                  </div>
-                </Link>
-              )}
-              {overStaff.slice(0, 2).map((s) => (
-                <div key={s.id} className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl">
-                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                  <p className="text-xs text-red-700 flex-1">{s.name}さん: 今月 {s.hours.toFixed(0)}h（週平均 {(s.hours / 4).toFixed(0)}h）</p>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Row 2 — Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard
+          icon={<Users className="w-5 h-5 text-white" />}
+          label="職員数"
+          value={`${staffCount}`}
+          unit="名"
+          gradient="from-orange-400 to-orange-500"
+        />
+        <StatCard
+          icon={<CalendarDays className="w-5 h-5 text-white" />}
+          label="今月シフト入力率"
+          value={`${fillRate}`}
+          unit="%"
+          gradient="from-sky-400 to-sky-500"
+        />
+        <StatCard
+          icon={<AlertTriangle className="w-5 h-5 text-white" />}
+          label="配置不足日数"
+          value={`${shortDays}`}
+          unit="日"
+          gradient="from-amber-400 to-amber-500"
+          alert={shortDays > 0}
+        />
+        <StatCard
+          icon={<CalendarDays className="w-5 h-5 text-white" />}
+          label="有効シフト日数"
+          value={`${activeDays}`}
+          unit="日"
+          gradient="from-emerald-400 to-emerald-500"
+        />
+      </div>
 
-          {/* 統計カード */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard
-              icon={<Users className="w-5 h-5 text-white" />}
-              label="職員数"
-              value={`${staff.length}`}
-              unit="名"
-              gradient="from-orange-400 to-orange-500"
-            />
-            <StatCard
-              icon={<CalendarDays className="w-5 h-5 text-white" />}
-              label={`${monthLabel}シフト`}
-              value={`${Object.keys(shifts[yearMonth] ?? {}).length}`}
-              unit="名分"
-              gradient="from-sky-400 to-sky-500"
-            />
-            <StatCard
-              icon={<ClipboardList className="w-5 h-5 text-white" />}
-              label="未処理申請"
-              value={`${pendingRequests.length}`}
-              unit="件"
-              gradient="from-violet-400 to-violet-500"
-              alert={pendingRequests.length > 0}
-            />
-            <StatCard
-              icon={<AlertTriangle className="w-5 h-5 text-white" />}
-              label="残業アラート"
-              value={`${overStaff.length}`}
-              unit="名"
-              gradient="from-amber-400 to-amber-500"
-              alert={overStaff.length > 0}
-            />
+      {/* Row 3 — 今日の配置状況 */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Sun className="w-4 h-4 text-amber-400" />
+            <h2 className="font-bold text-gray-700 text-sm">今日の配置状況</h2>
           </div>
-
-          {/* 今日の配置状況 */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Sun className="w-4 h-4 text-amber-400" />
-                <h2 className="font-bold text-gray-700 text-sm">今日の配置状況</h2>
-              </div>
-              <span className="text-xs text-gray-400">{format(today, 'M月d日（E）', { locale: ja })}</span>
-            </div>
-            {todayWorkingStaff.length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">今日の出勤者データがありません</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {todayWorkingStaff.map((s) => (
-                  <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 bg-gray-50">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                      style={{ backgroundColor: s.color }}
-                    >
-                      {s.name[0]}
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-gray-700 leading-tight">{s.name.split(' ')[0]}</p>
-                      {s.pattern && (
-                        <p className="text-[10px] leading-tight" style={{ color: s.pattern.color }}>
-                          {s.pattern.name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* クイックリンク */}
-          <div className="space-y-2.5">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">クイックアクション</p>
-            <QuickLink to="/shift"    icon="📅" label="シフト表を編集する"  desc={fullMonthLabel} color="bg-orange-100" />
-            <QuickLink to="/requests" icon="📋" label="申請を確認する"      desc={`${pendingRequests.length}件 待ち`} color="bg-violet-100" badge={pendingRequests.length} />
-            <QuickLink to="/staff"    icon="👥" label="職員を管理する"      desc={`${staff.length}名登録中`} color="bg-sky-100" />
-          </div>
-
-          {/* 今月の勤務時間チャート */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-primary-500" />
-                <h2 className="font-bold text-gray-700">{fullMonthLabel}の勤務時間</h2>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {staffHours.map((s) => {
-                const isOver = (s.hours / 4) > 40
-                const pct = Math.min(100, (s.hours / (s.weeklyHours * 4)) * 100)
-                return (
-                  <div key={s.id} className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                      style={{ backgroundColor: s.color }}
-                    >
-                      {s.name[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-700 truncate">{s.name}</span>
-                        <span className={`text-sm font-bold shrink-0 ml-2 ${isOver ? 'text-red-500' : 'text-gray-700'}`}>
-                          {s.hours.toFixed(0)}h
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-700 ease-out ${isOver ? 'bg-red-400' : 'bg-primary-400'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 今月のカレンダーハイライト */}
-          <MonthCalendarHighlight
-            yearMonth={yearMonth}
-            today={today}
-            daysInMonth={daysInMonth}
-            dailyShiftCounts={dailyShiftCounts}
-            totalStaff={staff.length}
-          />
-        </>
-      ) : (
-        // 職員ダッシュボード
-        <div className="space-y-4">
-
-          {/* 今日のシフト */}
-          <div className={`card border-2 ${myTodayPattern ? '' : 'border-gray-100'}`}
-            style={myTodayPattern ? { borderColor: myTodayPattern.color + '60' } : {}}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-medium text-gray-500">今日のシフト</p>
-              <span className="text-xs text-gray-400">{format(today, 'M月d日 (E)', { locale: ja })}</span>
-            </div>
-            {myTodayPattern ? (
-              <div className="flex items-center gap-3 mt-2">
-                <span
-                  className="text-lg font-bold px-4 py-1.5 rounded-xl"
-                  style={{ backgroundColor: myTodayPattern.bgColor, color: myTodayPattern.color }}
-                >
-                  {myTodayPattern.name}
-                </span>
-                {!myTodayPattern.isOff && (
-                  <span className="text-sm text-gray-500">
-                    {myTodayPattern.startTime} 〜 {myTodayPattern.endTime}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-sm mt-1">シフトが未登録です</p>
-            )}
-          </div>
-
-          {/* 統計 */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard
-              icon={<Clock className="w-5 h-5 text-white" />}
-              label={`${monthLabel}の勤務時間`}
-              value={`${myHours.toFixed(0)}`}
-              unit="h"
-              gradient="from-orange-400 to-orange-500"
-            />
-            <StatCard
-              icon={<CalendarDays className="w-5 h-5 text-white" />}
-              label="シフト登録日数"
-              value={`${myShiftsThisMonth}`}
-              unit="日"
-              gradient="from-sky-400 to-sky-500"
-            />
-          </div>
-
-          {/* クイックリンク */}
-          <div className="space-y-2.5">
-            <QuickLink to="/shift"      icon="📅" label="シフト表を確認する" desc={fullMonthLabel} color="bg-orange-100" />
-            <QuickLink to="/my-request" icon="🙋" label="希望休を申請する"   desc="申請・確認" color="bg-green-100" badge={myRequests.filter((r) => r.status === 'pending').length} />
-          </div>
-
-          {/* 申請履歴 */}
-          <div className="card">
-            <h2 className="font-bold text-gray-700 mb-3">申請の状況</h2>
-            {myRequests.length === 0 ? (
-              <p className="text-sm text-gray-400 py-2">申請はまだありません</p>
-            ) : (
-              <div className="space-y-2">
-                {myRequests.slice(0, 5).map((r) => (
-                  <div key={r.id} className="flex items-center justify-between py-1.5">
-                    <div>
-                      <span className="text-sm text-gray-700 font-medium">{r.date}</span>
-                      <span className="ml-2 text-xs text-gray-400">{r.type === 'paid' ? '有給' : '希望休'}</span>
-                    </div>
-                    <StatusBadge status={r.status} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <span className="text-xs text-gray-400">{format(today, 'M月d日（E）', { locale: ja })}</span>
         </div>
-      )}
+        {/* 必要人数サマリー */}
+        <p className="text-xs text-gray-500 mb-3">
+          現在: <span className="font-semibold text-gray-700">{todayWorkingStaff.length}名</span>
+          <span className="mx-1 text-gray-300">/</span>
+          職員数: <span className="font-semibold text-gray-700">{staffCount}名</span>
+        </p>
+        {todayWorkingStaff.length === 0 ? (
+          <p className="text-sm text-gray-400 py-2">今日の出勤者データがありません</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {todayWorkingStaff.map((s) => (
+              <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 bg-gray-50">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  style={{ backgroundColor: s.color }}
+                >
+                  {s.name[0]}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-700 leading-tight">{s.name.split(' ')[0]}</p>
+                  {s.pattern && (
+                    <p className="text-[10px] leading-tight" style={{ color: s.pattern.color }}>
+                      {s.pattern.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Row 4 — 今月シフト進捗 */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp className="w-4 h-4 text-primary-500" />
+          <h2 className="font-bold text-gray-700 text-sm">今月シフト進捗</h2>
+          <span className="ml-auto text-xs font-semibold text-primary-600">{fillRate}%</span>
+        </div>
+        {/* Progress bar */}
+        <div className="w-full bg-gray-100 rounded-full h-3 mb-3">
+          <div
+            className="h-3 rounded-full transition-all duration-700 ease-out bg-primary-400"
+            style={{ width: `${fillRate}%` }}
+          />
+        </div>
+        {allFilled ? (
+          <p className="text-sm text-emerald-600 font-medium">全日程 入力済み ✓</p>
+        ) : (
+          <p className="text-sm text-gray-500">あと <span className="font-semibold text-gray-700">{unfilledDays}日分</span> 入力が必要です</p>
+        )}
+        <Link
+          to="/shift-calendar"
+          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
+        >
+          シフトを入力する
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
+
+      {/* Row 5 — 職員別今月勤務時間 */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-4 h-4 text-primary-500" />
+          <h2 className="font-bold text-gray-700">{fullMonthLabel}の勤務時間</h2>
+        </div>
+        <div className="space-y-3">
+          {staffHours.map((s) => {
+            const isOver = (s.hours / 4) > 40
+            const pct = Math.min(100, (s.hours / (s.weeklyHours * 4)) * 100)
+            return (
+              <div key={s.id} className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  style={{ backgroundColor: s.color }}
+                >
+                  {s.name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-700 truncate">{s.name}</span>
+                    <span className={`text-sm font-bold shrink-0 ml-2 ${isOver ? 'text-red-500' : 'text-gray-700'}`}>
+                      {s.hours.toFixed(0)}h
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-700 ease-out ${isOver ? 'bg-red-400' : 'bg-primary-400'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Row 6 — クイックアクション */}
+      <div className="space-y-2.5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">クイックアクション</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <QuickLink to="/shift-calendar" icon={<LayoutGrid className="w-5 h-5 text-orange-500" />}  label="カレンダー配置"  desc="シフトをカレンダーで管理" color="bg-orange-100" />
+          <QuickLink to="/shift"          icon={<CalendarDays className="w-5 h-5 text-sky-500" />}   label="シフト表（一覧）" desc={fullMonthLabel}           color="bg-sky-100" />
+          <QuickLink to="/summary"        icon={<BarChart3 className="w-5 h-5 text-violet-500" />}   label="勤怠サマリー"    desc="月次集計・確認"            color="bg-violet-100" />
+        </div>
+      </div>
+
+      {/* 今月のカレンダーハイライト */}
+      <MonthCalendarHighlight
+        yearMonth={yearMonth}
+        today={today}
+        daysInMonth={daysInMonth}
+        dailyShiftCounts={dailyShiftCounts}
+        totalStaff={staffCount}
+      />
     </div>
   )
 }
@@ -341,7 +301,6 @@ function StatCard({ icon, label, value, unit, gradient, alert }: {
     const tick = (now: number) => {
       const elapsed = now - startTime
       const progress = Math.min(elapsed / duration, 1)
-      // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3)
       setDisplayed(Math.round(start + (end - start) * eased))
       if (progress < 1) requestAnimationFrame(tick)
@@ -352,12 +311,9 @@ function StatCard({ icon, label, value, unit, gradient, alert }: {
 
   return (
     <div className={`relative overflow-hidden rounded-2xl shadow-sm border ${alert ? 'border-amber-300' : 'border-transparent'} transition-transform duration-100 active:scale-[0.98]`}>
-      {/* Gradient background */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90`} />
-      {/* Decorative circle */}
       <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-white opacity-10" />
       <div className="absolute -right-1 -bottom-5 w-14 h-14 rounded-full bg-white opacity-10" />
-
       <div className="relative p-4 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="w-9 h-9 rounded-xl bg-white bg-opacity-25 flex items-center justify-center">
@@ -379,39 +335,28 @@ function StatCard({ icon, label, value, unit, gradient, alert }: {
   )
 }
 
-function QuickLink({ to, icon, label, desc, color, badge }: {
-  to: string; icon: string; label: string; desc: string; color: string; badge?: number
+function QuickLink({ to, icon, label, desc, color }: {
+  to: string
+  icon: React.ReactNode
+  label: string
+  desc: string
+  color: string
 }) {
   return (
     <Link
       to={to}
       className="card flex items-center gap-4 p-4 hover:shadow-md active:scale-[0.98] transition-all duration-150"
     >
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0 ${color}`}>
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-gray-800 text-sm">{label}</p>
         <p className="text-xs text-gray-400 truncate">{desc}</p>
       </div>
-      {badge != null && badge > 0 && (
-        <span className="w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
-          {badge}
-        </span>
-      )}
       <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
     </Link>
   )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending:  { label: '審査中', cls: 'bg-amber-100 text-amber-700' },
-    approved: { label: '承認済', cls: 'bg-green-100 text-green-700' },
-    rejected: { label: '却下',   cls: 'bg-red-100 text-red-700' },
-  }
-  const item = map[status] ?? map.pending
-  return <span className={`badge ${item.cls}`}>{item.label}</span>
 }
 
 function MonthCalendarHighlight({
@@ -427,7 +372,6 @@ function MonthCalendarHighlight({
   dailyShiftCounts: Record<string, number>
   totalStaff: number
 }) {
-  // 月初の曜日オフセット（日曜=0）
   const firstDow = getDay(parseISO(`${yearMonth}-01`))
   const todayNum = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') === yearMonth
     ? today.getDate()
@@ -437,7 +381,6 @@ function MonthCalendarHighlight({
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ]
-  // 7の倍数に揃える
   while (cells.length % 7 !== 0) cells.push(null)
 
   const weeks = []
@@ -453,13 +396,11 @@ function MonthCalendarHighlight({
         <CalendarDays className="w-4 h-4 text-primary-500" />
         <h2 className="font-bold text-gray-700 text-sm">今月のカレンダーハイライト</h2>
       </div>
-      {/* 凡例 */}
       <div className="flex items-center gap-3 mb-3 text-[10px] text-gray-400">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary-400 inline-block" />多め</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary-200 inline-block" />少なめ</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-200 inline-block" />未登録</span>
       </div>
-      {/* 曜日ヘッダー */}
       <div className="grid grid-cols-7 mb-1">
         {DOW_LABELS.map((d, i) => (
           <div key={d} className={`text-center text-[10px] font-medium pb-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
@@ -467,7 +408,6 @@ function MonthCalendarHighlight({
           </div>
         ))}
       </div>
-      {/* 日付グリッド */}
       <div className="space-y-1">
         {weeks.map((week, wi) => (
           <div key={wi} className="grid grid-cols-7 gap-0.5">
