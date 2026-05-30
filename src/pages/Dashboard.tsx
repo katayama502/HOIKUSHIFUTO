@@ -165,7 +165,7 @@ export default function Dashboard() {
         {todayWorkingStaff.length === 0 ? (
           <p className="text-sm text-gray-400 py-2">今日の出勤者データがありません</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {todayWorkingStaff.map((s) => (
               <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 bg-gray-50">
                 <div
@@ -257,7 +257,7 @@ export default function Dashboard() {
       {/* Row 6 — クイックアクション */}
       <div className="space-y-2.5">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">クイックアクション</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
           <QuickLink to="/shift-calendar" icon={<LayoutGrid className="w-5 h-5 text-orange-500" />}  label="カレンダー配置"  desc="シフトをカレンダーで管理" color="bg-orange-100" />
           <QuickLink to="/shift"          icon={<CalendarDays className="w-5 h-5 text-sky-500" />}   label="シフト表（一覧）" desc={fullMonthLabel}           color="bg-sky-100" />
           <QuickLink to="/summary"        icon={<BarChart3 className="w-5 h-5 text-violet-500" />}   label="勤怠サマリー"    desc="月次集計・確認"            color="bg-violet-100" />

@@ -112,7 +112,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 md:space-y-6 max-w-2xl">
       <div>
         <h1 className="text-xl font-bold text-gray-800">設定</h1>
         <p className="text-sm text-gray-500 mt-0.5">保育園の基本情報・クラス・シフトパターンを設定できます</p>
@@ -161,8 +161,8 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div className="bg-gray-50 rounded-xl px-4 py-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="bg-gray-50 rounded-xl px-3 sm:px-4 py-3">
             <p className="text-xs text-gray-400 mb-0.5">テーマカラー</p>
             <p className="text-sm font-medium text-gray-700">{THEME_LABELS[uiSettings.theme]}</p>
           </div>
@@ -317,7 +317,7 @@ export default function SettingsPage() {
 
         <div className="space-y-2">
           {shiftPatterns.map((p, index) => (
-            <div key={p.id} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50">
+            <div key={p.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-xl bg-gray-50">
               {/* 順序変更ボタン */}
               <div className="flex flex-col gap-0.5 shrink-0">
                 <button
@@ -366,7 +366,7 @@ export default function SettingsPage() {
         {/* 印刷方向 */}
         <div>
           <label className="label">印刷の向き</label>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <button
               onClick={() => setPrintOrientation('portrait')}
               className={`flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${

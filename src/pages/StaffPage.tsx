@@ -133,7 +133,7 @@ export default function StaffPage() {
       </div>
 
       {/* Search & Filter */}
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-col sm:flex-row gap-2">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input
@@ -151,12 +151,12 @@ export default function StaffPage() {
             </button>
           )}
         </div>
-        <div className="flex gap-1 shrink-0">
+        <div className="flex gap-1">
           {(['all', 'fulltime', 'parttime'] as FilterEmployment[]).map((v) => (
             <button
               key={v}
               onClick={() => setFilterEmployment(v)}
-              className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border ${
+              className={`flex-1 sm:flex-none px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border ${
                 filterEmployment === v
                   ? 'bg-primary-500 text-white border-primary-500'
                   : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
@@ -193,7 +193,7 @@ export default function StaffPage() {
       {/* 職員一覧 */}
       <div className="space-y-3">
         {filteredStaff.map((s) => (
-          <div key={s.id} className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div key={s.id} className="card p-3 sm:p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-bold shrink-0"
               style={{ backgroundColor: s.color }}
