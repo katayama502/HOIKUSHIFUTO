@@ -1,7 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, Users, ClipboardList, AlertTriangle, Clock, ChevronRight } from 'lucide-react'
-import { format } from 'date-fns'
+import {
+  CalendarDays, Users, ClipboardList, AlertTriangle,
+  Clock, ChevronRight, TrendingUp, Printer, Sun,
+} from 'lucide-react'
+import { format, getDaysInMonth, parseISO, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
 import { getYearMonth, calcMonthlyHours } from '../utils/shift'
@@ -34,18 +37,52 @@ export default function Dashboard() {
   const myTodayEntry = shifts[yearMonth]?.[currentStaffId ?? '']?.[todayDay]
   const myTodayPattern = myTodayEntry ? shiftPatterns.find((p) => p.id === myTodayEntry.patternId) : null
 
+  // 今日出勤している職員
+  const todayWorkingStaff = useMemo(() => {
+    return staff.map((s) => {
+      const entry = shifts[yearMonth]?.[s.id]?.[todayDay]
+      const pattern = entry ? shiftPatterns.find((p) => p.id === entry.patternId) : null
+      return { ...s, pattern, entry }
+    }).filter((s) => s.pattern && !s.pattern.isOff)
+  }, [staff, shifts, shiftPatterns, yearMonth, todayDay])
+
+  // 今月の日別シフト登録件数（ミニカレンダー用）
+  const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
+  const dailyShiftCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = String(d)
+      let count = 0
+      staff.forEach((s) => {
+        const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
+        const pattern = entry ? shiftPatterns.find((p) => p.id === entry.patternId) : null
+        if (pattern && !pattern.isOff) count++
+      })
+      counts[dayStr] = count
+    }
+    return counts
+  }, [staff, shifts, shiftPatterns, yearMonth, daysInMonth])
+
   return (
     <div className="space-y-5 max-w-2xl mx-auto md:max-w-none">
 
       {/* あいさつヘッダー */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">
+          <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             {currentRole === 'admin' ? 'こんにちは！' : `こんにちは、${myData?.name?.split(' ')[0] ?? ''}さん`}
-            <span className="ml-1">{currentRole === 'admin' ? '👩‍💼' : '🌸'}</span>
+            <span className="text-base">{currentRole === 'admin' ? '👩‍💼' : '🌸'}</span>
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">{fullMonthLabel} — {orgSettings.name}</p>
         </div>
+        <button
+          onClick={() => window.print()}
+          className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:scale-95 transition-all duration-100 shadow-sm"
+          title="印刷"
+        >
+          <Printer className="w-3.5 h-3.5" />
+          印刷
+        </button>
       </div>
 
       {currentRole === 'admin' ? (
@@ -55,7 +92,7 @@ export default function Dashboard() {
             <div className="space-y-2">
               {pendingRequests.length > 0 && (
                 <Link to="/requests">
-                  <div className="flex items-center gap-3 px-4 py-3.5 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <div className="flex items-center gap-3 px-4 py-3.5 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 active:scale-[0.99] transition-all duration-100">
                     <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-amber-800">未処理の申請が {pendingRequests.length} 件あります</p>
@@ -77,31 +114,70 @@ export default function Dashboard() {
           {/* 統計カード */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard
-              icon={<Users className="w-5 h-5 text-primary-500" />}
+              icon={<Users className="w-5 h-5 text-white" />}
               label="職員数"
-              value={`${staff.length}名`}
-              bg="bg-orange-50"
+              value={`${staff.length}`}
+              unit="名"
+              gradient="from-orange-400 to-orange-500"
             />
             <StatCard
-              icon={<CalendarDays className="w-5 h-5 text-sky-500" />}
+              icon={<CalendarDays className="w-5 h-5 text-white" />}
               label={`${monthLabel}シフト`}
-              value={`${Object.keys(shifts[yearMonth] ?? {}).length}名分`}
-              bg="bg-sky-50"
+              value={`${Object.keys(shifts[yearMonth] ?? {}).length}`}
+              unit="名分"
+              gradient="from-sky-400 to-sky-500"
             />
             <StatCard
-              icon={<ClipboardList className="w-5 h-5 text-violet-500" />}
+              icon={<ClipboardList className="w-5 h-5 text-white" />}
               label="未処理申請"
-              value={`${pendingRequests.length}件`}
-              bg="bg-violet-50"
+              value={`${pendingRequests.length}`}
+              unit="件"
+              gradient="from-violet-400 to-violet-500"
               alert={pendingRequests.length > 0}
             />
             <StatCard
-              icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}
+              icon={<AlertTriangle className="w-5 h-5 text-white" />}
               label="残業アラート"
-              value={`${overStaff.length}名`}
-              bg="bg-amber-50"
+              value={`${overStaff.length}`}
+              unit="名"
+              gradient="from-amber-400 to-amber-500"
               alert={overStaff.length > 0}
             />
+          </div>
+
+          {/* 今日の配置状況 */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Sun className="w-4 h-4 text-amber-400" />
+                <h2 className="font-bold text-gray-700 text-sm">今日の配置状況</h2>
+              </div>
+              <span className="text-xs text-gray-400">{format(today, 'M月d日（E）', { locale: ja })}</span>
+            </div>
+            {todayWorkingStaff.length === 0 ? (
+              <p className="text-sm text-gray-400 py-2">今日の出勤者データがありません</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {todayWorkingStaff.map((s) => (
+                  <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 bg-gray-50">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                      style={{ backgroundColor: s.color }}
+                    >
+                      {s.name[0]}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 leading-tight">{s.name.split(' ')[0]}</p>
+                      {s.pattern && (
+                        <p className="text-[10px] leading-tight" style={{ color: s.pattern.color }}>
+                          {s.pattern.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* クイックリンク */}
@@ -112,10 +188,13 @@ export default function Dashboard() {
             <QuickLink to="/staff"    icon="👥" label="職員を管理する"      desc={`${staff.length}名登録中`} color="bg-sky-100" />
           </div>
 
-          {/* 今月の勤務時間 */}
+          {/* 今月の勤務時間チャート */}
           <div className="card">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-gray-700">{fullMonthLabel}の勤務時間</h2>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary-500" />
+                <h2 className="font-bold text-gray-700">{fullMonthLabel}の勤務時間</h2>
+              </div>
             </div>
             <div className="space-y-3">
               {staffHours.map((s) => {
@@ -138,7 +217,7 @@ export default function Dashboard() {
                       </div>
                       <div className="w-full bg-gray-100 rounded-full h-2">
                         <div
-                          className={`h-2 rounded-full transition-all duration-500 ${isOver ? 'bg-red-400' : 'bg-primary-400'}`}
+                          className={`h-2 rounded-full transition-all duration-700 ease-out ${isOver ? 'bg-red-400' : 'bg-primary-400'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -148,6 +227,15 @@ export default function Dashboard() {
               })}
             </div>
           </div>
+
+          {/* 今月のカレンダーハイライト */}
+          <MonthCalendarHighlight
+            yearMonth={yearMonth}
+            today={today}
+            daysInMonth={daysInMonth}
+            dailyShiftCounts={dailyShiftCounts}
+            totalStaff={staff.length}
+          />
         </>
       ) : (
         // 職員ダッシュボード
@@ -182,16 +270,18 @@ export default function Dashboard() {
           {/* 統計 */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard
-              icon={<Clock className="w-5 h-5 text-primary-500" />}
+              icon={<Clock className="w-5 h-5 text-white" />}
               label={`${monthLabel}の勤務時間`}
-              value={`${myHours.toFixed(0)}h`}
-              bg="bg-orange-50"
+              value={`${myHours.toFixed(0)}`}
+              unit="h"
+              gradient="from-orange-400 to-orange-500"
             />
             <StatCard
-              icon={<CalendarDays className="w-5 h-5 text-sky-500" />}
+              icon={<CalendarDays className="w-5 h-5 text-white" />}
               label="シフト登録日数"
-              value={`${myShiftsThisMonth}日`}
-              bg="bg-sky-50"
+              value={`${myShiftsThisMonth}`}
+              unit="日"
+              gradient="from-sky-400 to-sky-500"
             />
           </div>
 
@@ -228,17 +318,62 @@ export default function Dashboard() {
 
 // --- Sub components ---
 
-function StatCard({ icon, label, value, bg, alert }: {
-  icon: React.ReactNode; label: string; value: string; bg: string; alert?: boolean
+function StatCard({ icon, label, value, unit, gradient, alert }: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  unit: string
+  gradient: string
+  alert?: boolean
 }) {
+  const [displayed, setDisplayed] = useState(0)
+  const numericValue = parseInt(value, 10)
+  const isNumeric = !isNaN(numericValue)
+  const prevRef = useRef(0)
+
+  useEffect(() => {
+    if (!isNumeric) return
+    const start = prevRef.current
+    const end = numericValue
+    if (start === end) return
+    const duration = 600
+    const startTime = performance.now()
+    const tick = (now: number) => {
+      const elapsed = now - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplayed(Math.round(start + (end - start) * eased))
+      if (progress < 1) requestAnimationFrame(tick)
+      else prevRef.current = end
+    }
+    requestAnimationFrame(tick)
+  }, [numericValue, isNumeric])
+
   return (
-    <div className={`card flex items-center gap-3 p-4 ${alert ? 'border-amber-200' : ''}`}>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bg}`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-400 truncate">{label}</p>
-        <p className="text-xl font-bold text-gray-800 leading-tight">{value}</p>
+    <div className={`relative overflow-hidden rounded-2xl shadow-sm border ${alert ? 'border-amber-300' : 'border-transparent'} transition-transform duration-100 active:scale-[0.98]`}>
+      {/* Gradient background */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90`} />
+      {/* Decorative circle */}
+      <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-white opacity-10" />
+      <div className="absolute -right-1 -bottom-5 w-14 h-14 rounded-full bg-white opacity-10" />
+
+      <div className="relative p-4 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="w-9 h-9 rounded-xl bg-white bg-opacity-25 flex items-center justify-center">
+            {icon}
+          </div>
+          {alert && (
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-white text-opacity-80 truncate">{label}</p>
+          <p className="text-2xl font-bold text-white leading-tight">
+            {isNumeric ? displayed : value}
+            <span className="text-sm font-medium ml-0.5 opacity-80">{unit}</span>
+          </p>
+        </div>
       </div>
     </div>
   )
@@ -277,4 +412,94 @@ function StatusBadge({ status }: { status: string }) {
   }
   const item = map[status] ?? map.pending
   return <span className={`badge ${item.cls}`}>{item.label}</span>
+}
+
+function MonthCalendarHighlight({
+  yearMonth,
+  today,
+  daysInMonth,
+  dailyShiftCounts,
+  totalStaff,
+}: {
+  yearMonth: string
+  today: Date
+  daysInMonth: number
+  dailyShiftCounts: Record<string, number>
+  totalStaff: number
+}) {
+  // 月初の曜日オフセット（日曜=0）
+  const firstDow = getDay(parseISO(`${yearMonth}-01`))
+  const todayNum = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') === yearMonth
+    ? today.getDate()
+    : -1
+
+  const cells: (number | null)[] = [
+    ...Array(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  // 7の倍数に揃える
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const weeks = []
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7))
+  }
+
+  const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-3">
+        <CalendarDays className="w-4 h-4 text-primary-500" />
+        <h2 className="font-bold text-gray-700 text-sm">今月のカレンダーハイライト</h2>
+      </div>
+      {/* 凡例 */}
+      <div className="flex items-center gap-3 mb-3 text-[10px] text-gray-400">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary-400 inline-block" />多め</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary-200 inline-block" />少なめ</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-200 inline-block" />未登録</span>
+      </div>
+      {/* 曜日ヘッダー */}
+      <div className="grid grid-cols-7 mb-1">
+        {DOW_LABELS.map((d, i) => (
+          <div key={d} className={`text-center text-[10px] font-medium pb-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+            {d}
+          </div>
+        ))}
+      </div>
+      {/* 日付グリッド */}
+      <div className="space-y-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 gap-0.5">
+            {week.map((day, di) => {
+              if (day === null) return <div key={di} />
+              const count = dailyShiftCounts[String(day)] ?? 0
+              const isToday = day === todayNum
+              const ratio = totalStaff > 0 ? count / totalStaff : 0
+              const dotColor = count === 0
+                ? 'bg-gray-200'
+                : ratio >= 0.6
+                  ? 'bg-primary-400'
+                  : ratio >= 0.3
+                    ? 'bg-primary-300'
+                    : 'bg-primary-200'
+              const isSun = di === 0
+              const isSat = di === 6
+
+              return (
+                <div key={di} className="flex flex-col items-center py-1">
+                  <span className={`text-[11px] font-medium leading-tight w-6 h-6 flex items-center justify-center rounded-full transition-all
+                    ${isToday ? 'bg-primary-500 text-white font-bold' : isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-gray-600'}
+                  `}>
+                    {day}
+                  </span>
+                  <span className={`mt-0.5 w-1.5 h-1.5 rounded-full ${dotColor}`} title={`${count}名出勤`} />
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
