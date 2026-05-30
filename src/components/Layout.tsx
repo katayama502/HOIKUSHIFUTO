@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Users, Settings,
   Baby, ChevronRight,
-  PanelLeftClose, PanelLeftOpen, BarChart3, Palette, LayoutGrid,
+  PanelLeftClose, PanelLeftOpen, Palette, LayoutGrid,
   SlidersHorizontal,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -15,7 +15,6 @@ const adminNav = [
   { to: '/shift',             icon: CalendarDays,      label: 'シフト表（一覧）' },
   { to: '/staff',             icon: Users,             label: '職員管理' },
   { to: '/staff-constraints', icon: SlidersHorizontal, label: '出勤条件設定' },
-  { to: '/summary',           icon: BarChart3,         label: '勤怠サマリー' },
   { to: '/settings',          icon: Settings,          label: '設定' },
 ]
 
