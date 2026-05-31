@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
   Printer, Download, ChevronDown, ChevronUp, Check, X,
-  Copy, UserPlus, Pencil,
+  Copy, UserPlus, Pencil, Wand2,
 } from 'lucide-react'
 import { format, addMonths, subMonths, getDay, getDaysInMonth, parseISO, addWeeks, subWeeks } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -15,6 +15,7 @@ import { validateMonth } from '../utils/validation'
 import { AGE_RATIO } from '../types'
 import type { ShiftPattern } from '../types'
 import StaffPanel from '../components/StaffPanel'
+import AutoScheduleModal from '../components/AutoScheduleModal'
 
 // ─── Drag payload ─────────────────────────────────────────────────────────────
 type DragPayload =
@@ -121,6 +122,9 @@ export default function ShiftCalendarPage() {
     setStaffPanelOpen(true)
     setTrayExpanded(false)
   }
+
+  // Auto-schedule modal
+  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false)
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false)
@@ -713,6 +717,14 @@ export default function ShiftCalendarPage() {
               : <><CheckCircle className="w-3 h-3" />OK</>
             }
           </button>
+          {/* Auto-schedule */}
+          <button
+            onClick={() => setAutoScheduleOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-primary-500 text-white active:scale-95 transition-all shadow-sm"
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+            一括
+          </button>
           {/* CSV download */}
           <button
             onClick={handleExportCSV}
@@ -821,6 +833,14 @@ export default function ShiftCalendarPage() {
         </div>
 
         {/* Action buttons */}
+        <button
+          onClick={() => setAutoScheduleOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-all shadow-sm"
+          title="条件設定をもとにシフトを自動生成"
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          一括作成
+        </button>
         <button
           onClick={() => setShowCopyModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
@@ -1520,6 +1540,13 @@ export default function ShiftCalendarPage() {
         open={staffPanelOpen}
         staffId={staffPanelTargetId}
         onClose={() => setStaffPanelOpen(false)}
+      />
+
+      {/* ══════════════════ AUTO SCHEDULE MODAL ══════════════════ */}
+      <AutoScheduleModal
+        open={autoScheduleOpen}
+        yearMonth={yearMonth}
+        onClose={() => setAutoScheduleOpen(false)}
       />
     </div>
   )
