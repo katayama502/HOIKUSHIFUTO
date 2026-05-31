@@ -9,8 +9,9 @@ import {
 import { format, getDaysInMonth, parseISO, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
-import { getYearMonth, calcMonthlyHours } from '../utils/shift'
+import { getYearMonth, calcMonthlyHours, getDaySlots } from '../utils/shift'
 import type { DashboardCardId, DashboardCard } from '../types'
+import HintTooltip from '../components/HintTooltip'
 
 // ─── Card metadata ────────────────────────────────────────────────────────────
 const CARD_LABELS: Record<DashboardCardId, string> = {
@@ -39,7 +40,6 @@ export default function Dashboard() {
   const fullMonthLabel = format(today, 'yyyy年M月', { locale: ja })
   const todayLabel = format(today, 'yyyy年M月d日（E）', { locale: ja })
   const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
-  const todayDay = String(today.getDate())
 
   // Ensure dashboardCards exists (migration safety for old persisted state)
   const cards: DashboardCard[] = uiSettings.dashboardCards ?? DEFAULT_CARDS
@@ -58,40 +58,51 @@ export default function Dashboard() {
     [staff, shifts, shiftPatterns, yearMonth]
   )
 
+  const patternMap = useMemo(
+    () => Object.fromEntries(shiftPatterns.map((p) => [p.id, p])),
+    [shiftPatterns],
+  )
+
   const todayWorkingStaff = useMemo(() =>
-    staff.map((s) => {
-      const entry = shifts[yearMonth]?.[s.id]?.[todayDay]
-      const pattern = entry ? shiftPatterns.find((p) => p.id === entry.patternId) : null
-      return { ...s, pattern, entry }
-    }).filter((s) => s.pattern && !s.pattern.isOff),
-    [staff, shifts, shiftPatterns, yearMonth, todayDay]
+    staff.flatMap((s) => {
+      const staffData = shifts[yearMonth]?.[s.id] ?? {}
+      const slots = getDaySlots(staffData, today.getDate())
+      const workSlots = slots.filter((sl) => !patternMap[sl.patternId]?.isOff)
+      if (workSlots.length === 0) return []
+      // Show staff once with their first work pattern
+      const firstSlot = workSlots[0]
+      const pattern = patternMap[firstSlot.patternId] ?? null
+      return [{ ...s, pattern, entry: firstSlot }]
+    }),
+    [staff, shifts, shiftPatterns, yearMonth, today, patternMap]
   )
 
   const dailyShiftCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayStr = String(d)
-      let count = 0
-      staff.forEach((s) => {
-        const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-        const pattern = entry ? shiftPatterns.find((p) => p.id === entry.patternId) : null
-        if (pattern && !pattern.isOff) count++
-      })
-      counts[dayStr] = count
+      const uniqueStaff = new Set(
+        staff.filter((s) => {
+          const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d)
+          return slots.some((sl) => !patternMap[sl.patternId]?.isOff)
+        }).map((s) => s.id),
+      )
+      counts[String(d)] = uniqueStaff.size
     }
     return counts
-  }, [staff, shifts, shiftPatterns, yearMonth, daysInMonth])
+  }, [staff, shifts, shiftPatterns, yearMonth, daysInMonth, patternMap])
 
   const staffCount = staff.length
   const totalCells = staffCount * daysInMonth
   const filledCells = useMemo(() => {
     let count = 0
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayStr = String(d)
-      staff.forEach((s) => { if (shifts[yearMonth]?.[s.id]?.[dayStr]) count++ })
+      staff.forEach((s) => {
+        const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d)
+        if (slots.some((sl) => !patternMap[sl.patternId]?.isOff)) count++
+      })
     }
     return count
-  }, [staff, shifts, yearMonth, daysInMonth])
+  }, [staff, shifts, yearMonth, daysInMonth, patternMap])
   const fillRate = totalCells > 0 ? Math.round((filledCells / totalCells) * 100) : 0
 
   const shortDays = useMemo(() => {
@@ -283,17 +294,30 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-gray-800">{orgSettings.name}</h1>
           <p className="text-sm text-gray-400 mt-0.5">{todayLabel}</p>
         </div>
-        <button
-          onClick={() => setEditMode((v) => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 shrink-0 cursor-pointer ${
-            editMode
-              ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
-              : 'text-gray-500 bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
-          }`}
-        >
-          <Settings2 className="w-3.5 h-3.5" />
-          {editMode ? 'カスタマイズ中' : 'カスタマイズ'}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setEditMode((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 shrink-0 cursor-pointer ${
+              editMode
+                ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
+                : 'text-gray-500 bg-white border-gray-200 hover:bg-gray-50 shadow-sm'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            {editMode ? 'カスタマイズ中' : 'カスタマイズ'}
+          </button>
+          <HintTooltip
+            title="ダッシュボードのカスタマイズ"
+            content={
+              <ul className="space-y-1.5">
+                <li>• 「カスタマイズ」ボタンで編集モードになります</li>
+                <li>• カードを<strong className="text-white">ドラッグ</strong>、または<strong className="text-white">▲▼ボタン</strong>で順番を入れ替えられます</li>
+                <li>• 目のアイコンで各カードを<strong className="text-white">表示/非表示</strong>できます</li>
+                <li>• 「リセット」で元の並び順に戻せます</li>
+              </ul>
+            }
+          />
+        </div>
       </div>
 
       {/* Edit mode banner */}

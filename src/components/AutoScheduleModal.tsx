@@ -4,6 +4,7 @@ import {
   AlertTriangle, CheckCircle, Info,
   RefreshCw,
 } from 'lucide-react'
+import HintTooltip from './HintTooltip'
 import { getDaysInMonth, parseISO, getDay, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
@@ -173,7 +174,18 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
 
             {/* Mode */}
             <div>
-              <p className="text-sm font-bold text-gray-700 mb-2">作成モード</p>
+              <div className="flex items-center gap-1.5 mb-2">
+                <p className="text-sm font-bold text-gray-700">作成モード</p>
+                <HintTooltip
+                  title="どちらのモードを選ぶ？"
+                  content={
+                    <ul className="space-y-1.5">
+                      <li>• <strong className="text-white">補完モード</strong>：手動で入力済みのシフトはそのまま残し、空いている日だけを自動で埋めます。部分的に調整した後に残りを埋めたいときに最適です</li>
+                      <li>• <strong className="text-white">上書きモード</strong>：今月のシフトを全て消して、最初から自動生成します。月初めにまとめて作成したいときに使います</li>
+                    </ul>
+                  }
+                />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {([
                   { value: 'fill',      label: '補完モード',   desc: '空き日のみ埋める（手動入力を保持）' },
@@ -197,7 +209,19 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
 
             {/* 前月参照 */}
             <div>
-              <p className="text-sm font-bold text-gray-700 mb-2">前月シフト参照</p>
+              <div className="flex items-center gap-1.5 mb-2">
+                <p className="text-sm font-bold text-gray-700">前月シフト参照</p>
+                <HintTooltip
+                  title="前月参照の効果"
+                  content={
+                    <ul className="space-y-1.5">
+                      <li>• 希望パターンが未設定の職員に対し、前月最も多く勤務したパターンを優先的に割り当てます</li>
+                      <li>• 先月と同じリズムで働ける日が多くなり、職員の負担軽減につながります</li>
+                      <li>• 希望パターンが設定されている職員には影響しません（希望が最優先）</li>
+                    </ul>
+                  }
+                />
+              </div>
               <button
                 onClick={() => setUsePrevMonth((v) => !v)}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all active:scale-95 cursor-pointer ${
@@ -231,7 +255,20 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
             {/* Pattern balance */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-bold text-gray-700">1日あたりのパターン配置数</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold text-gray-700">1日あたりのパターン配置数</p>
+                  <HintTooltip
+                    title="配置数の設定"
+                    content={
+                      <ul className="space-y-1.5">
+                        <li>• 各シフトパターンに<strong className="text-white">1日に何名配置するか</strong>を設定します</li>
+                        <li>• 例：早番3名・中番2名・遅番2名 → 合計7名/日</li>
+                        <li>• 0にするとそのパターンは自動生成の対象外になります</li>
+                        <li>• 職員の総数・制約・希望を考慮して自動で割り当てます</li>
+                      </ul>
+                    }
+                  />
+                </div>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   totalTargetPerDay === 0 ? 'bg-gray-100 text-gray-500' :
                   totalTargetPerDay >= result?.stats.totalRequired! || !result ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
