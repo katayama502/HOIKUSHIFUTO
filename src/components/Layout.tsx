@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard, CalendarDays, Users, Settings,
+  LayoutDashboard, CalendarDays, Settings,
   Baby, ChevronRight,
   PanelLeftClose, PanelLeftOpen, Palette, LayoutGrid,
   SlidersHorizontal,
@@ -13,7 +13,6 @@ const adminNav = [
   { to: '/',                  icon: LayoutDashboard,   label: 'ホーム' },
   { to: '/shift-calendar',    icon: LayoutGrid,        label: 'カレンダー配置' },
   { to: '/shift',             icon: CalendarDays,      label: 'シフト表（一覧）' },
-  { to: '/staff',             icon: Users,             label: '職員管理' },
   { to: '/staff-constraints', icon: SlidersHorizontal, label: '出勤条件設定' },
   { to: '/settings',          icon: Settings,          label: '設定' },
 ]
