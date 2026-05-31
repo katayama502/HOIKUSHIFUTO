@@ -7,7 +7,7 @@ import {
 import { getDaysInMonth, parseISO, getDay, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
-import { autoGenerateShifts } from '../utils/autoSchedule'
+import { autoGenerateShifts, buildPrevMonthPatternMap, getPrevYearMonth } from '../utils/autoSchedule'
 import type { PatternTarget, AutoScheduleMode, AutoScheduleResult } from '../utils/autoSchedule'
 
 interface Props {
@@ -36,6 +36,18 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
   const [targets, setTargets] = useState<PatternTarget[]>(() =>
     workPatterns.map((p) => ({ patternId: p.id, targetCount: 0 }))
   )
+  const [usePrevMonth, setUsePrevMonth] = useState(true)
+
+  // 前月ラベルと前月データの有無
+  const prevYearMonth = useMemo(() => getPrevYearMonth(yearMonth), [yearMonth])
+  const prevMonthLabel = useMemo(
+    () => format(parseISO(`${prevYearMonth}-01`), 'yyyy年M月', { locale: ja }),
+    [prevYearMonth],
+  )
+  const hasPrevMonthData = useMemo(
+    () => Object.keys(shifts[prevYearMonth] ?? {}).length > 0,
+    [shifts, prevYearMonth],
+  )
 
   function setTarget(patternId: string, count: number) {
     setTargets((prev) =>
@@ -49,9 +61,13 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
   const [result, setResult] = useState<AutoScheduleResult | null>(null)
 
   function runGeneration() {
+    const prevPatterns = usePrevMonth && hasPrevMonthData
+      ? buildPrevMonthPatternMap(prevYearMonth, staff, shiftPatterns, shifts)
+      : undefined
     const res = autoGenerateShifts(
       yearMonth, mode, targets,
       staff, shiftPatterns, classRooms, constraints, shifts,
+      prevPatterns,
     )
     setResult(res)
     setStep(2)
@@ -177,6 +193,39 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* 前月参照 */}
+            <div>
+              <p className="text-sm font-bold text-gray-700 mb-2">前月シフト参照</p>
+              <button
+                onClick={() => setUsePrevMonth((v) => !v)}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all active:scale-95 cursor-pointer ${
+                  usePrevMonth && hasPrevMonthData
+                    ? 'border-primary-400 bg-primary-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Toggle switch */}
+                <div className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${usePrevMonth && hasPrevMonthData ? 'bg-primary-500' : 'bg-gray-200'}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${usePrevMonth && hasPrevMonthData ? 'translate-x-5' : 'translate-x-1'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold leading-tight ${usePrevMonth && hasPrevMonthData ? 'text-primary-700' : 'text-gray-600'}`}>
+                    {prevMonthLabel}の実績を参照
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">
+                    {hasPrevMonthData
+                      ? '希望未設定の職員に、前月最多パターンを優先ヒントとして使用します'
+                      : '前月のシフトデータがありません'}
+                  </p>
+                </div>
+                {hasPrevMonthData ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">データあり</span>
+                ) : (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 shrink-0">データなし</span>
+                )}
+              </button>
             </div>
 
             {/* Pattern balance */}
