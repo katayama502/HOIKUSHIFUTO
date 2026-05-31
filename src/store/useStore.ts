@@ -49,6 +49,14 @@ const defaultUISettings: UISettings = {
   fontSize: 'medium',
   showWeekends: true,
   sidebarCollapsed: false,
+  dashboardCards: [
+    { id: 'stats',        visible: true },
+    { id: 'today',        visible: true },
+    { id: 'progress',     visible: true },
+    { id: 'hours',        visible: true },
+    { id: 'quickActions', visible: true },
+    { id: 'calendar',     visible: true },
+  ],
 }
 
 const defaultPatterns: ShiftPattern[] = [
