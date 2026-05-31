@@ -180,8 +180,8 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
                   title="どちらのモードを選ぶ？"
                   content={
                     <ul className="space-y-1.5">
-                      <li>• <strong className="text-white">補完モード</strong>：手動で入力済みのシフトはそのまま残し、空いている日だけを自動で埋めます。部分的に調整した後に残りを埋めたいときに最適です</li>
-                      <li>• <strong className="text-white">上書きモード</strong>：今月のシフトを全て消して、最初から自動生成します。月初めにまとめて作成したいときに使います</li>
+                      <li>• <strong className="text-gray-900">補完モード</strong>：手動で入力済みのシフトはそのまま残し、空いている日だけを自動で埋めます。部分的に調整した後に残りを埋めたいときに最適です</li>
+                      <li>• <strong className="text-gray-900">上書きモード</strong>：今月のシフトを全て消して、最初から自動生成します。月初めにまとめて作成したいときに使います</li>
                     </ul>
                   }
                 />
@@ -261,7 +261,7 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
                     title="配置数の設定"
                     content={
                       <ul className="space-y-1.5">
-                        <li>• 各シフトパターンに<strong className="text-white">1日に何名配置するか</strong>を設定します</li>
+                        <li>• 各シフトパターンに<strong className="text-gray-900">1日に何名配置するか</strong>を設定します</li>
                         <li>• 例：早番3名・中番2名・遅番2名 → 合計7名/日</li>
                         <li>• 0にするとそのパターンは自動生成の対象外になります</li>
                         <li>• 職員の総数・制約・希望を考慮して自動で割り当てます</li>

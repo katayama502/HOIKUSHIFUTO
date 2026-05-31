@@ -311,8 +311,8 @@ export default function Dashboard() {
             content={
               <ul className="space-y-1.5">
                 <li>• 「カスタマイズ」ボタンで編集モードになります</li>
-                <li>• カードを<strong className="text-white">ドラッグ</strong>、または<strong className="text-white">▲▼ボタン</strong>で順番を入れ替えられます</li>
-                <li>• 目のアイコンで各カードを<strong className="text-white">表示/非表示</strong>できます</li>
+                <li>• カードを<strong className="text-gray-900">ドラッグ</strong>、または<strong className="text-gray-900">▲▼ボタン</strong>で順番を入れ替えられます</li>
+                <li>• 目のアイコンで各カードを<strong className="text-gray-900">表示/非表示</strong>できます</li>
                 <li>• 「リセット」で元の並び順に戻せます</li>
               </ul>
             }

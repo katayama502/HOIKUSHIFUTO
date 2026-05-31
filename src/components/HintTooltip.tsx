@@ -85,14 +85,14 @@ export default function HintTooltip({ title, content, size = 'sm', className = '
           onMouseEnter={cancelClose}
           onMouseLeave={handleLeave}
         >
-          <div className="bg-gray-900/96 backdrop-blur-sm text-white rounded-2xl shadow-2xl border border-white/10 p-3.5 animate-in fade-in-0 zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-3.5 animate-in fade-in-0 zoom-in-95 duration-150">
             {title && (
-              <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-white/10">
-                <HelpCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />
-                <span className="text-[11px] font-bold text-primary-300 leading-tight">{title}</span>
+              <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-gray-200">
+                <HelpCircle className="w-3.5 h-3.5 text-primary-500 shrink-0" />
+                <span className="text-[11px] font-bold text-primary-600 leading-tight">{title}</span>
               </div>
             )}
-            <div className="text-[11px] leading-relaxed text-gray-200 space-y-1">
+            <div className="text-[11px] leading-relaxed text-gray-700 space-y-1">
               {content}
             </div>
           </div>
