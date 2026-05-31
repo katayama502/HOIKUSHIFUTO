@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
   Printer, Download, ChevronDown, ChevronUp, Check, X,
-  Copy, UserPlus, Pencil, Wand2,
+  Copy, UserPlus, Pencil, Wand2, LayoutGrid,
 } from 'lucide-react'
 import { format, addMonths, subMonths, getDay, getDaysInMonth, parseISO, addWeeks, subWeeks } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -10,22 +10,33 @@ import { useStore } from '../store/useStore'
 import {
   calcWorkHours, getYearMonth, getDaysArray,
   generateShiftExcel, downloadFile,
+  getDaySlots,
 } from '../utils/shift'
 import { validateMonth } from '../utils/validation'
 import { AGE_RATIO } from '../types'
 import type { ShiftPattern } from '../types'
 import StaffPanel from '../components/StaffPanel'
 import AutoScheduleModal from '../components/AutoScheduleModal'
+import WorkflowPanel from '../components/WorkflowPanel'
 
 // ─── Drag payload ─────────────────────────────────────────────────────────────
 type DragPayload =
   | { type: 'from-rail'; staffId: string; patternId: string }
-  | { type: 'from-cell'; staffId: string; patternId: string; sourceYM: string; sourceDayStr: string }
+  | { type: 'from-cell'; staffId: string; patternId: string; sourceYM: string; sourceSlotKey: string }
 
 // ─── Popover state ────────────────────────────────────────────────────────────
 interface PopoverState {
   staffId: string
-  day: string
+  slotKey: string       // e.g. "15_early"
+  day: string           // just the day number string
+  x: number
+  y: number
+}
+
+// ─── Hover tooltip state ─────────────────────────────────────────────────────
+interface TooltipState {
+  staffId: string
+  slotKey: string
   x: number
   y: number
 }
@@ -33,6 +44,7 @@ interface PopoverState {
 // ─── Mobile chip sheet state ──────────────────────────────────────────────────
 interface MobileChipSheetState {
   staffId: string
+  slotKey: string       // specific slot to edit
   day: string
   ym: string
 }
@@ -88,7 +100,7 @@ function countWorkingDays(yearMonth: string): number {
 export default function ShiftCalendarPage() {
   const {
     staff, shiftPatterns, shifts, classRooms,
-    setShiftEntry, clearShiftEntry,
+    setShiftEntry, clearShiftSlot,
   } = useStore()
   const staffConstraints = useStore((s) => s.staffConstraints) ?? {}
 
@@ -105,6 +117,8 @@ export default function ShiftCalendarPage() {
 
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)
   const [popover, setPopover] = useState<PopoverState | null>(null)
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showViolations, setShowViolations] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [mobileChipSheet, setMobileChipSheet] = useState<MobileChipSheetState | null>(null)
@@ -116,6 +130,15 @@ export default function ShiftCalendarPage() {
   // Staff panel (add / edit)
   const [staffPanelOpen, setStaffPanelOpen] = useState(false)
   const [staffPanelTargetId, setStaffPanelTargetId] = useState<string | null>(null)
+
+  // Workflow panel (per-staff month batch entry)
+  const [workflowOpen, setWorkflowOpen] = useState(false)
+  const [workflowStaffId, setWorkflowStaffId] = useState<string | null>(null)
+
+  function openWorkflow(staffId: string) {
+    setWorkflowStaffId(staffId)
+    setWorkflowOpen(true)
+  }
 
   function openStaffPanel(id: string | null) {
     setStaffPanelTargetId(id)
@@ -165,32 +188,31 @@ export default function ShiftCalendarPage() {
     const result: Record<string, { workDays: number; totalHours: number }> = {}
     for (const s of staff) {
       const monthData = shifts[yearMonth]?.[s.id] ?? {}
-      let workDays = 0
+      // Count unique work DAYS (not slots — same day with 2 patterns = 1 work day)
+      const workDaySet = new Set<number>()
       let totalHours = 0
-      for (const entry of Object.values(monthData)) {
+      for (const [slotKey, entry] of Object.entries(monthData)) {
         const p = patternMap[entry.patternId]
         if (!p) continue
-        if (!p.isOff) {
-          workDays++
-          totalHours += calcWorkHours(p)
-        }
+        totalHours += calcWorkHours(p)
+        if (!p.isOff) workDaySet.add(parseInt(slotKey, 10))
       }
-      result[s.id] = { workDays, totalHours }
+      result[s.id] = { workDays: workDaySet.size, totalHours }
     }
     return result
   }, [staff, shifts, yearMonth, patternMap])
 
-  // ─── Placement counts per day ────────────────────────────────────────────
+  // ─── Placement counts per day (unique staff working) ────────────────────
   const placementCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     const days = getDaysArray(yearMonth)
     for (const d of days) {
-      const dayStr = String(d.getDate())
+      const dayNum = d.getDate()
+      const dayStr = String(dayNum)
       counts[dayStr] = staff.filter((s) => {
-        const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-        if (!entry) return false
-        const p = patternMap[entry.patternId]
-        return p && !p.isOff
+        const staffData = shifts[yearMonth]?.[s.id] ?? {}
+        const slots = getDaySlots(staffData, dayNum)
+        return slots.some((sl) => { const p = patternMap[sl.patternId]; return p && !p.isOff })
       }).length
     }
     return counts
@@ -269,9 +291,9 @@ export default function ShiftCalendarPage() {
     setDragPayload(payload)
   }
 
-  function handleChipDragStart(e: React.DragEvent, staffId: string, patternId: string, sourceYM: string, sourceDayStr: string) {
+  function handleChipDragStart(e: React.DragEvent, staffId: string, patternId: string, sourceYM: string, sourceSlotKey: string) {
     e.stopPropagation()
-    const payload: DragPayload = { type: 'from-cell', staffId, patternId, sourceYM, sourceDayStr }
+    const payload: DragPayload = { type: 'from-cell', staffId, patternId, sourceYM, sourceSlotKey }
     e.dataTransfer.setData('text/plain', JSON.stringify(payload))
     e.dataTransfer.effectAllowed = 'move'
 
@@ -311,8 +333,10 @@ export default function ShiftCalendarPage() {
     if (!payload) return
 
     if (payload.type === 'from-cell') {
-      if (payload.sourceYM !== targetYM || payload.sourceDayStr !== targetDayStr) {
-        clearShiftEntry(payload.sourceYM, payload.staffId, payload.sourceDayStr)
+      // Remove source slot (even if same day — moving a slot to same day is a no-op but still cleans source)
+      const sourceDay = parseInt(payload.sourceSlotKey, 10)
+      if (payload.sourceYM !== targetYM || sourceDay !== parseInt(targetDayStr, 10)) {
+        clearShiftSlot(payload.sourceYM, payload.staffId, payload.sourceSlotKey)
       }
     }
     setShiftEntry(targetYM, payload.staffId, targetDayStr, { patternId: payload.patternId, note: '' })
@@ -328,7 +352,7 @@ export default function ShiftCalendarPage() {
       payload = dragPayload
     }
     if (payload?.type === 'from-cell') {
-      clearShiftEntry(payload.sourceYM, payload.staffId, payload.sourceDayStr)
+      clearShiftSlot(payload.sourceYM, payload.staffId, payload.sourceSlotKey)
     }
     setDragPayload(null)
     setDragOverKey(null)
@@ -348,35 +372,62 @@ export default function ShiftCalendarPage() {
       return
     }
 
-    const existing = shifts[targetYM]?.[selectedStaffId]?.[targetDayStr]
-    if (existing && existing.patternId === activePatternId) {
-      clearShiftEntry(targetYM, selectedStaffId, targetDayStr)
+    // Find if the specific pattern slot already exists for this day
+    const staffData = shifts[targetYM]?.[selectedStaffId] ?? {}
+    const daySlots = getDaySlots(staffData, parseInt(targetDayStr, 10))
+    const existingSlot = daySlots.find((sl) => sl.patternId === activePatternId)
+
+    if (existingSlot) {
+      // Toggle OFF — remove that specific slot only
+      clearShiftSlot(targetYM, selectedStaffId, existingSlot.slotKey)
     } else {
       setShiftEntry(targetYM, selectedStaffId, targetDayStr, { patternId: activePatternId, note: '' })
     }
   }
 
   // ─── Popover ──────────────────────────────────────────────────────────────
-  const openPopover = useCallback((e: React.MouseEvent, staffId: string, day: string) => {
+  const openPopover = useCallback((e: React.MouseEvent, staffId: string, slotKey: string, day: string) => {
     e.stopPropagation()
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+    setTooltip(null)
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     let x = rect.right + 8
     let y = rect.top
     if (x + 220 > window.innerWidth) x = rect.left - 228
-    if (y + 320 > window.innerHeight) y = window.innerHeight - 330
-    setPopover({ staffId, day, x, y })
+    if (y + 340 > window.innerHeight) y = window.innerHeight - 350
+    setPopover({ staffId, slotKey, day, x, y })
   }, [])
 
   function handlePopoverPattern(patternId: string) {
     if (!popover) return
+    // Replace old slot with new pattern slot
+    clearShiftSlot(yearMonth, popover.staffId, popover.slotKey)
     setShiftEntry(yearMonth, popover.staffId, popover.day, { patternId, note: '' })
     setPopover(null)
   }
 
   function handlePopoverDelete() {
     if (!popover) return
-    clearShiftEntry(yearMonth, popover.staffId, popover.day)
+    clearShiftSlot(yearMonth, popover.staffId, popover.slotKey)
     setPopover(null)
+  }
+
+  // ─── Hover tooltip ────────────────────────────────────────────────────────
+  function handleChipMouseEnter(e: React.MouseEvent, staffId: string, slotKey: string) {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    tooltipTimerRef.current = setTimeout(() => {
+      let x = rect.right + 8
+      let y = rect.top
+      if (x + 240 > window.innerWidth) x = rect.left - 248
+      if (y + 180 > window.innerHeight) y = window.innerHeight - 190
+      setTooltip({ staffId, slotKey, x, y })
+    }, 250)
+  }
+
+  function handleChipMouseLeave() {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current)
+    setTooltip(null)
   }
 
   useEffect(() => {
@@ -481,23 +532,29 @@ export default function ShiftCalendarPage() {
     const cellKey = `${cellYM}-${dayStr}`
     const isDragTarget = dragOverKey === cellKey
 
-    // Staff placed on this day
+    // Staff placed on this day — each slot is a separate chip (multi-shift allowed)
     const placedStaff = isInMonth
-      ? staff
-          .map((s) => {
-            const entry = shifts[cellYM]?.[s.id]?.[dayStr]
-            if (!entry) return null
-            const pattern = patternMap[entry.patternId]
-            if (!pattern) return null
-            return { staff: s, pattern, entry }
-          })
-          .filter((x): x is { staff: typeof staff[0]; pattern: ShiftPattern; entry: { patternId: string; note: string } } => x !== null)
+      ? staff.flatMap((s) => {
+          const staffData = shifts[cellYM]?.[s.id] ?? {}
+          const daySlots = getDaySlots(staffData, date.getDate())
+          return daySlots
+            .map((sl) => {
+              const pattern = patternMap[sl.patternId]
+              if (!pattern) return null
+              return { staff: s, pattern, entry: sl, slotKey: sl.slotKey }
+            })
+            .filter((x): x is { staff: typeof staff[0]; pattern: ShiftPattern; entry: typeof daySlots[0]; slotKey: string } => x !== null)
+        })
+        // Sort by shift start time
+        .sort((a, b) => (a.pattern.startTime || '').localeCompare(b.pattern.startTime || ''))
       : []
 
     // Selected staff tint
     const selectedStaff = selectedStaffId ? staff.find((s) => s.id === selectedStaffId) : null
     const isSelectedStaffHere = isInMonth && selectedStaffId !== null &&
       placedStaff.some((ps) => ps.staff.id === selectedStaffId)
+    // Count unique staff working (for badge display)
+    const uniqueStaffCount = new Set(placedStaff.map((ps) => ps.staff.id)).size
 
     // On mobile: tint cell if selected staff is placed here
     const selectedStaffTint = isSelectedStaffHere && selectedStaff
@@ -549,7 +606,7 @@ export default function ShiftCalendarPage() {
           </span>
 
           {/* Placement badge */}
-          {isInMonth && count > 0 && (
+          {isInMonth && uniqueStaffCount > 0 && (
             <span
               className={`text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
                 isOk
@@ -557,7 +614,7 @@ export default function ShiftCalendarPage() {
                   : 'bg-red-100 text-red-600'
               }`}
             >
-              {count}/{totalRequired}
+              {uniqueStaffCount}/{totalRequired}
               {isOk ? (
                 <Check className="w-2 h-2 md:w-2.5 md:h-2.5" />
               ) : (
@@ -567,28 +624,30 @@ export default function ShiftCalendarPage() {
           )}
         </div>
 
-        {/* Staff cards — each placed staff as a contained card */}
+        {/* Staff cards — each placed slot as a contained card (multi-shift per day supported) */}
         <div className="flex flex-col gap-1 flex-1">
-          {placedStaff.map(({ staff: s, pattern }) => {
+          {placedStaff.map(({ staff: s, pattern, slotKey }) => {
             const chipStatus = getChipConstraintStatus(s.id, date, dayStr)
             const isSelectedChip = selectedStaffId === s.id
 
             return (
               <div
-                key={s.id}
+                key={slotKey}
                 draggable={!isMobile}
-                onDragStart={!isMobile ? (e) => handleChipDragStart(e, s.id, pattern.id, cellYM, dayStr) : undefined}
+                onDragStart={!isMobile ? (e) => handleChipDragStart(e, s.id, pattern.id, cellYM, slotKey) : undefined}
                 onDragEnd={!isMobile ? handleDragEnd : undefined}
+                onMouseEnter={!isMobile ? (e) => handleChipMouseEnter(e, s.id, slotKey) : undefined}
+                onMouseLeave={!isMobile ? handleChipMouseLeave : undefined}
                 onClick={(e) => {
                   e.stopPropagation()
                   if (isMobile) {
-                    setMobileChipSheet({ staffId: s.id, day: dayStr, ym: cellYM })
+                    setMobileChipSheet({ staffId: s.id, slotKey, day: dayStr, ym: cellYM })
                   } else {
-                    openPopover(e, s.id, dayStr)
+                    openPopover(e, s.id, slotKey, dayStr)
                   }
                 }}
                 className={`group rounded-lg overflow-hidden select-none transition-all ${
-                  isMobile ? 'cursor-pointer active:scale-95' : 'cursor-grab active:cursor-grabbing hover:shadow-md'
+                  isMobile ? 'cursor-pointer active:scale-95' : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:brightness-95'
                 }`}
                 style={{
                   backgroundColor: pattern.bgColor,
@@ -601,7 +660,6 @@ export default function ShiftCalendarPage() {
                         ? '0 0 0 1.5px #f59e0b'
                         : `0 1px 3px ${s.color}20`,
                 }}
-                title={`${s.name} — ${pattern.name}${chipStatus !== 'ok' ? '\n⚠ 制約違反あり' : ''}\nクリックでパターン変更`}
               >
                 <div className="flex items-center gap-1 px-1 py-1 md:px-1.5">
                   {/* Avatar */}
@@ -634,7 +692,7 @@ export default function ShiftCalendarPage() {
                   {/* Remove — desktop hover */}
                   {!isMobile && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); clearShiftEntry(cellYM, s.id, dayStr) }}
+                      onClick={(e) => { e.stopPropagation(); clearShiftSlot(cellYM, s.id, slotKey) }}
                       className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto hover:text-red-500"
                       title="削除"
                     >
@@ -999,14 +1057,23 @@ export default function ShiftCalendarPage() {
                       今日: {todayPattern.name}
                     </div>
                   )}
-                  {/* Edit button — shown on hover */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openStaffPanel(s.id) }}
-                    className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded-md bg-white/90 border border-gray-200 opacity-0 group-hover:opacity-100 hover:!opacity-100 hover:bg-gray-50 active:scale-90 transition-all shadow-sm"
-                    title={`${s.name}を編集`}
-                  >
-                    <Pencil className="w-2.5 h-2.5 text-gray-400" />
-                  </button>
+                  {/* Workflow + Edit buttons — shown on hover */}
+                  <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openWorkflow(s.id) }}
+                      className="w-5 h-5 flex items-center justify-center rounded-md bg-white/90 border border-gray-200 hover:bg-amber-50 hover:border-amber-300 active:scale-90 transition-all shadow-sm"
+                      title={`${s.name}の月間入力`}
+                    >
+                      <LayoutGrid className="w-2.5 h-2.5 text-amber-500" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openStaffPanel(s.id) }}
+                      className="w-5 h-5 flex items-center justify-center rounded-md bg-white/90 border border-gray-200 hover:bg-gray-50 active:scale-90 transition-all shadow-sm"
+                      title={`${s.name}を編集`}
+                    >
+                      <Pencil className="w-2.5 h-2.5 text-gray-400" />
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -1092,7 +1159,7 @@ export default function ShiftCalendarPage() {
       {/* ══════════════════ MOBILE BOTTOM SHEET — chip action ══════════════════ */}
       {mobileChipSheet && (() => {
         const sheetStaff = staff.find((s) => s.id === mobileChipSheet.staffId)
-        const currentPatternId = shifts[mobileChipSheet.ym]?.[mobileChipSheet.staffId]?.[mobileChipSheet.day]?.patternId
+        const currentPatternId = shifts[mobileChipSheet.ym]?.[mobileChipSheet.staffId]?.[mobileChipSheet.slotKey]?.patternId
         return (
           <div
             className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-[2px]"
@@ -1117,7 +1184,7 @@ export default function ShiftCalendarPage() {
                 )}
                 <div>
                   <p className="font-bold text-gray-800">{sheetStaff?.name}</p>
-                  <p className="text-xs text-gray-400">{mobileChipSheet.day}日 — シフトパターンを選択</p>
+                  <p className="text-xs text-gray-400">{mobileChipSheet.day}日 — シフトパターンを変更</p>
                 </div>
               </div>
 
@@ -1129,6 +1196,8 @@ export default function ShiftCalendarPage() {
                     <button
                       key={p.id}
                       onClick={() => {
+                        // Replace this specific slot with the new pattern
+                        clearShiftSlot(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.slotKey)
                         setShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day, { patternId: p.id, note: '' })
                         setMobileChipSheet(null)
                       }}
@@ -1155,10 +1224,10 @@ export default function ShiftCalendarPage() {
                 })}
               </div>
 
-              {/* Delete */}
+              {/* Delete this slot only */}
               <button
                 onClick={() => {
-                  clearShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day)
+                  clearShiftSlot(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.slotKey)
                   setMobileChipSheet(null)
                 }}
                 className="w-full py-3 rounded-2xl bg-red-50 text-red-500 font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all border border-red-100"
@@ -1459,6 +1528,62 @@ export default function ShiftCalendarPage() {
         )}
       </div>
 
+      {/* ══════════════════ HOVER TOOLTIP (desktop) ══════════════════ */}
+      {tooltip && (() => {
+        const tooltipStaff = staff.find((s) => s.id === tooltip.staffId)
+        const slotEntry = shifts[yearMonth]?.[tooltip.staffId]?.[tooltip.slotKey]
+        const tooltipPattern = slotEntry ? patternMap[slotEntry.patternId] : null
+        const tooltipStats = staffStats[tooltip.staffId]
+        const tooltipConstraintStatus = getConstraintStatus(tooltip.staffId)
+        if (!tooltipStaff || !tooltipPattern) return null
+        return (
+          <div
+            className="hidden md:block fixed z-[60] pointer-events-none"
+            style={{ left: tooltip.x, top: tooltip.y }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 w-56 animate-in fade-in-0 zoom-in-95 duration-150">
+              {/* Staff row */}
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  style={{ backgroundColor: tooltipStaff.color }}
+                >
+                  {tooltipStaff.name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-800 truncate">{tooltipStaff.name}</p>
+                  <span className={`text-[9px] px-1 py-0.5 rounded-full font-semibold ${tooltipStaff.employment === 'fulltime' ? 'bg-sky-100 text-sky-600' : 'bg-violet-100 text-violet-600'}`}>
+                    {tooltipStaff.employment === 'fulltime' ? '正規' : 'パート'}
+                  </span>
+                </div>
+                {tooltipConstraintStatus !== 'ok' && (
+                  <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${tooltipConstraintStatus === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
+                )}
+              </div>
+              {/* Pattern */}
+              <div
+                className="flex items-center gap-2 px-2.5 py-2 rounded-xl mb-2"
+                style={{ backgroundColor: tooltipPattern.bgColor }}
+              >
+                <span className="text-sm font-bold" style={{ color: tooltipPattern.color }}>{tooltipPattern.name}</span>
+                {!tooltipPattern.isOff && (
+                  <span className="text-[10px] font-medium ml-auto" style={{ color: tooltipPattern.color }}>
+                    {tooltipPattern.startTime} – {tooltipPattern.endTime}
+                  </span>
+                )}
+              </div>
+              {/* Stats */}
+              <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                <span>今月 <strong className="text-gray-700">{tooltipStats?.workDays ?? 0}日</strong></span>
+                <span><strong className="text-gray-700">{tooltipStats?.totalHours.toFixed(0) ?? 0}h</strong></span>
+              </div>
+              <p className="text-[9px] text-gray-300 mt-1.5">クリックしてパターンを変更</p>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ══════════════════ PATTERN CHANGE POPOVER (desktop click) ══════════════════ */}
       {popover && (
         <div
           ref={popoverRef}
@@ -1476,7 +1601,7 @@ export default function ShiftCalendarPage() {
 
           <div className="grid grid-cols-2 gap-1.5 mb-2.5">
             {shiftPatterns.map((p) => {
-              const isCurrent = shifts[yearMonth]?.[popover.staffId]?.[popover.day]?.patternId === p.id
+              const isCurrent = p.id === (shifts[yearMonth]?.[popover.staffId]?.[popover.slotKey]?.patternId)
               return (
                 <button
                   key={p.id}
@@ -1547,6 +1672,14 @@ export default function ShiftCalendarPage() {
         open={autoScheduleOpen}
         yearMonth={yearMonth}
         onClose={() => setAutoScheduleOpen(false)}
+      />
+
+      {/* ══════════════════ WORKFLOW PANEL ══════════════════ */}
+      <WorkflowPanel
+        open={workflowOpen}
+        staffId={workflowStaffId}
+        yearMonth={yearMonth}
+        onClose={() => setWorkflowOpen(false)}
       />
     </div>
   )
