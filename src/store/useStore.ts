@@ -34,6 +34,7 @@ interface AppState {
 
   setShiftEntry: (yearMonth: string, staffId: string, day: string, entry: { patternId: string; note: string }) => void
   clearShiftEntry: (yearMonth: string, staffId: string, day: string) => void
+  clearShiftSlot: (yearMonth: string, staffId: string, slotKey: string) => void
   setBulkMonthShifts: (yearMonth: string, monthShifts: Record<string, Record<string, { patternId: string; note: string }>>) => void
 
   addLeaveRequest: (r: LeaveRequest) => void
@@ -142,7 +143,8 @@ export const useStore = create<AppState>()(
             ...state.shifts[yearMonth],
             [staffId]: {
               ...(state.shifts[yearMonth]?.[staffId] ?? {}),
-              [day]: entry,
+              // Composite key: "${day}_${patternId}" allows multi-slot per day
+              [`${day}_${entry.patternId}`]: entry,
             },
           },
         },
@@ -151,7 +153,18 @@ export const useStore = create<AppState>()(
       clearShiftEntry: (yearMonth, staffId, day) => set((state) => {
         const monthData = { ...(state.shifts[yearMonth] ?? {}) }
         const staffData = { ...(monthData[staffId] ?? {}) }
-        delete staffData[day]
+        const dayNum = parseInt(day, 10)
+        for (const key of Object.keys(staffData)) {
+          if (parseInt(key, 10) === dayNum) delete staffData[key]
+        }
+        monthData[staffId] = staffData
+        return { shifts: { ...state.shifts, [yearMonth]: monthData } }
+      }),
+
+      clearShiftSlot: (yearMonth, staffId, slotKey) => set((state) => {
+        const monthData = { ...(state.shifts[yearMonth] ?? {}) }
+        const staffData = { ...(monthData[staffId] ?? {}) }
+        delete staffData[slotKey]
         monthData[staffId] = staffData
         return { shifts: { ...state.shifts, [yearMonth]: monthData } }
       }),

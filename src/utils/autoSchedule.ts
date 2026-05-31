@@ -1,6 +1,7 @@
 import { getDaysInMonth, parseISO, getDay, format } from 'date-fns'
 import type { Staff, ShiftPattern, ClassRoom, ShiftData, StaffConstraint } from '../types'
 import { AGE_RATIO } from '../types'
+import { getSlotDay } from './shift'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -106,9 +107,9 @@ export function autoGenerateShifts(
     workDayNums[s.id] = new Set()
     if (mode === 'fill') {
       const existing = monthShifts[s.id] ?? {}
-      for (const [dayStr, entry] of Object.entries(existing)) {
+      for (const [slotKey, entry] of Object.entries(existing)) {
         const p = patternMap[entry.patternId]
-        if (p && !p.isOff) workDayNums[s.id].add(Number(dayStr))
+        if (p && !p.isOff) workDayNums[s.id].add(getSlotDay(slotKey))
       }
     }
   }
@@ -130,11 +131,13 @@ export function autoGenerateShifts(
     const assignedToday = new Set<string>()
     if (mode === 'fill') {
       for (const s of staff) {
-        const entry = monthShifts[s.id]?.[dayStr]
-        if (entry) {
-          const p = patternMap[entry.patternId]
-          if (p && !p.isOff) assignedToday.add(s.id)
-        }
+        const staffSlots = monthShifts[s.id] ?? {}
+        const hasWorkToday = Object.entries(staffSlots).some(([k, e]) => {
+          if (getSlotDay(k) !== d) return false
+          const p = patternMap[e.patternId]
+          return p && !p.isOff
+        })
+        if (hasWorkToday) assignedToday.add(s.id)
       }
     }
 
@@ -199,7 +202,7 @@ export function autoGenerateShifts(
         if (assignedToday.has(s.id)) continue
 
         if (!monthShifts[s.id]) monthShifts[s.id] = {}
-        monthShifts[s.id][dayStr] = { patternId, note: '' }
+        monthShifts[s.id][`${dayStr}_${patternId}`] = { patternId, note: '' }
         workDayNums[s.id].add(d)
         assignedToday.add(s.id)
         remaining--

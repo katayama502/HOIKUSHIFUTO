@@ -1,6 +1,23 @@
 import { getDaysInMonth, parseISO, format, startOfWeek, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import type { ShiftPattern, Staff, ShiftData } from '../types'
+import type { ShiftPattern, ShiftEntry, Staff, ShiftData } from '../types'
+
+// ── Slot key helpers ─────────────────────────────────────────────────────────
+// Slot keys: "${day}_${patternId}" (e.g. "15_early") — or legacy just "${day}".
+// parseInt("15_early", 10) === 15, parseInt("15", 10) === 15  ✓
+
+export function getSlotDay(slotKey: string): number {
+  return parseInt(slotKey, 10)
+}
+
+export function getDaySlots(
+  staffData: Record<string, ShiftEntry>,
+  dayNum: number,
+): Array<{ slotKey: string } & ShiftEntry> {
+  return Object.entries(staffData)
+    .filter(([k]) => parseInt(k, 10) === dayNum)
+    .map(([slotKey, entry]) => ({ slotKey, ...entry }))
+}
 
 export function calcWorkHours(pattern: ShiftPattern): number {
   if (pattern.isOff || !pattern.startTime || !pattern.endTime) return 0
@@ -85,12 +102,11 @@ export function generateShiftCSV(
     let totalHours = 0
     const cells: string[] = [s.name]
     for (const d of days) {
-      const dayStr = String(d.getDate())
-      const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-      const pattern = entry ? patternMap[entry.patternId] : null
-      if (pattern) {
-        cells.push(pattern.name)
-        totalHours += calcWorkHours(pattern)
+      const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d.getDate())
+      const patterns = slots.map((sl) => patternMap[sl.patternId]).filter(Boolean) as ShiftPattern[]
+      if (patterns.length > 0) {
+        cells.push(patterns.map((p) => p.name).join('/'))
+        totalHours += patterns.reduce((sum, p) => sum + calcWorkHours(p), 0)
       } else {
         cells.push('')
       }
@@ -102,12 +118,9 @@ export function generateShiftCSV(
   // Placement count row
   const placementRow: string[] = ['配置数']
   for (const d of days) {
-    const dayStr = String(d.getDate())
     const count = staffList.filter((s) => {
-      const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-      if (!entry) return false
-      const p = patternMap[entry.patternId]
-      return p && !p.isOff
+      const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d.getDate())
+      return slots.some((sl) => { const p = patternMap[sl.patternId]; return p && !p.isOff })
     }).length
     placementRow.push(String(count))
   }
@@ -164,11 +177,12 @@ export function getShiftSummaryText(
       const p = patternMap[entry.patternId]
       return sum + (p ? calcWorkHours(p) : 0)
     }, 0)
-    const workDays = Object.values(monthData).filter((entry) => {
-      const p = patternMap[entry.patternId]
-      return p && !p.isOff
-    }).length
-    lines.push(`${s.name}: ${workDays}日 / ${totalHours.toFixed(1)}h`)
+    const uniqueWorkDays = new Set(
+      Object.entries(monthData)
+        .filter(([, e]) => { const p = patternMap[e.patternId]; return p && !p.isOff })
+        .map(([k]) => parseInt(k, 10))
+    ).size
+    lines.push(`${s.name}: ${uniqueWorkDays}日 / ${totalHours.toFixed(1)}h`)
   }
   return lines.join('\n')
 }
