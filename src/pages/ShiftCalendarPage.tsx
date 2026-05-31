@@ -1005,11 +1005,11 @@ export default function ShiftCalendarPage() {
                 title="シフトの配置方法"
                 content={
                   <ul className="space-y-1.5">
-                    <li>• カードをカレンダーの日付マスに<strong className="text-white">ドラッグ</strong>してシフトを配置します</li>
+                    <li>• カードをカレンダーの日付マスに<strong className="text-gray-900">ドラッグ</strong>してシフトを配置します</li>
                     <li>• 下のパターン選択で「早番」「遅番」などを選んでからドラッグすると、そのパターンで配置されます</li>
-                    <li>• 同じ職員を同じ日に<strong className="text-white">別のパターンで複数回</strong>配置することもできます</li>
+                    <li>• 同じ職員を同じ日に<strong className="text-gray-900">別のパターンで複数回</strong>配置することもできます</li>
                     <li>• 配置済みのカードをクリック → パターン変更、×ボタン → 削除</li>
-                    <li>• カードにカーソルを乗せると<strong className="text-white">月間入力</strong>ボタンが表示され、1ヶ月分を一括で設定できます</li>
+                    <li>• カードにカーソルを乗せると<strong className="text-gray-900">月間入力</strong>ボタンが表示され、1ヶ月分を一括で設定できます</li>
                   </ul>
                 }
                 className="ml-0.5"
@@ -1138,7 +1138,7 @@ export default function ShiftCalendarPage() {
                 content={
                   <ul className="space-y-1.5">
                     <li>• ドラッグして配置する際のシフト種別をここで選択します</li>
-                    <li>• <strong className="text-white">早番</strong>（07:00〜）・<strong className="text-white">中番</strong>（09:00〜）・<strong className="text-white">遅番</strong>（11:00〜）など時間帯別に選べます</li>
+                    <li>• <strong className="text-gray-900">早番</strong>（07:00〜）・<strong className="text-gray-900">中番</strong>（09:00〜）・<strong className="text-gray-900">遅番</strong>（11:00〜）など時間帯別に選べます</li>
                     <li>• 同じ人に別パターンを配置すると、1日に複数のシフトを重ねられます</li>
                     <li>• 「休み」「有給」なども配置可能です</li>
                   </ul>
