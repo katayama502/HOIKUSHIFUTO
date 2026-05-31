@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { X, Check, Zap, CalendarDays } from 'lucide-react'
+import HintTooltip from './HintTooltip'
 import { getDaysInMonth, parseISO, getDay, format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
@@ -150,6 +151,16 @@ export default function WorkflowPanel({ open, staffId, yearMonth, onClose }: Pro
             <div className="flex items-center gap-2 mb-2">
               <CalendarDays className="w-3.5 h-3.5 text-primary-500" />
               <p className="text-xs font-bold text-gray-600">入力するシフトパターン</p>
+              <HintTooltip
+                title="パターンの選び方"
+                content={
+                  <ul className="space-y-1.5">
+                    <li>• カレンダーや一括入力で使うシフトパターンをここで選びます</li>
+                    <li>• 同じ人に「早番」と「遅番」の両方を同じ日に登録することもできます</li>
+                    <li>• 「休み」「有給」も選択して登録可能です</li>
+                  </ul>
+                }
+              />
             </div>
             <div className="flex flex-wrap gap-1.5">
               {shiftPatterns.map((p) => {
@@ -180,6 +191,17 @@ export default function WorkflowPanel({ open, staffId, yearMonth, onClose }: Pro
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
               <p className="text-xs font-bold text-gray-600">一括入力（曜日指定）</p>
+              <HintTooltip
+                title="一括入力の使い方"
+                content={
+                  <ul className="space-y-1.5">
+                    <li>① 上でシフトパターンを選ぶ（例：早番）</li>
+                    <li>② 出勤する曜日をタップして選択（例：月・水・金）</li>
+                    <li>③「一括適用」ボタンを押すと、今月の該当する全ての日にシフトが登録されます</li>
+                    <li>• 既に全日登録済みの場合は、もう一度押すと一括削除になります</li>
+                  </ul>
+                }
+              />
             </div>
             <div className="flex gap-1 mb-2.5">
               {DOW_LABELS.map((label, i) => {
@@ -221,7 +243,20 @@ export default function WorkflowPanel({ open, staffId, yearMonth, onClose }: Pro
           {/* Month calendar grid */}
           <div className="px-4 py-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-gray-700">個別入力</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-bold text-gray-700">個別入力</p>
+                <HintTooltip
+                  title="カレンダーで個別入力"
+                  content={
+                    <ul className="space-y-1.5">
+                      <li>• 日付をタップするたびに、選択中のパターンのON/OFFが切り替わります</li>
+                      <li>• 色付きの日：そのパターンで登録済み</li>
+                      <li>• 小さい丸印：他のパターンが既に登録されている日</li>
+                      <li>• 土曜は青・日曜は赤で表示されます</li>
+                    </ul>
+                  }
+                />
+              </div>
               <div className="flex items-center gap-2 text-[10px] text-gray-400">
                 <span>{totalWorkDays}日勤務</span>
                 <span>/{totalHours.toFixed(0)}h</span>

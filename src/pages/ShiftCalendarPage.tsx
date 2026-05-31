@@ -18,6 +18,7 @@ import type { ShiftPattern } from '../types'
 import StaffPanel from '../components/StaffPanel'
 import AutoScheduleModal from '../components/AutoScheduleModal'
 import WorkflowPanel from '../components/WorkflowPanel'
+import HintTooltip from '../components/HintTooltip'
 
 // ─── Drag payload ─────────────────────────────────────────────────────────────
 type DragPayload =
@@ -783,6 +784,17 @@ export default function ShiftCalendarPage() {
             <Wand2 className="w-3.5 h-3.5" />
             一括
           </button>
+          <HintTooltip
+            title="一括作成"
+            content={
+              <ul className="space-y-1.5">
+                <li>• 1ヶ月分のシフトを自動生成します</li>
+                <li>• 各パターンに何名配置するか設定するだけ</li>
+                <li>• 生成前にプレビューで確認できます</li>
+              </ul>
+            }
+            size="sm"
+          />
           {/* CSV download */}
           <button
             onClick={handleExportCSV}
@@ -844,32 +856,45 @@ export default function ShiftCalendarPage() {
         </div>
 
         {/* Violation badge */}
-        <button
-          onClick={() => setShowViolations((v) => !v)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-            errorCount > 0
-              ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowViolations((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+              errorCount > 0
+                ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+                : warningCount > 0
+                ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
+                : 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
+            }`}
+          >
+            {errorCount > 0 || warningCount > 0 ? (
+              <AlertTriangle className="w-3.5 h-3.5" />
+            ) : (
+              <CheckCircle className="w-3.5 h-3.5" />
+            )}
+            {errorCount > 0
+              ? `⚠ ${errorCount + warningCount}件の問題`
               : warningCount > 0
-              ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
-              : 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
-          }`}
-        >
-          {errorCount > 0 || warningCount > 0 ? (
-            <AlertTriangle className="w-3.5 h-3.5" />
-          ) : (
-            <CheckCircle className="w-3.5 h-3.5" />
-          )}
-          {errorCount > 0
-            ? `⚠ ${errorCount + warningCount}件の問題`
-            : warningCount > 0
-            ? `⚠ ${warningCount}件の警告`
-            : '✓ 問題なし'
-          }
-          {showViolations
-            ? <ChevronUp className="w-3 h-3" />
-            : <ChevronDown className="w-3 h-3" />
-          }
-        </button>
+              ? `⚠ ${warningCount}件の警告`
+              : '✓ 問題なし'
+            }
+            {showViolations
+              ? <ChevronUp className="w-3 h-3" />
+              : <ChevronDown className="w-3 h-3" />
+            }
+          </button>
+          <HintTooltip
+            title="制約チェックとは？"
+            content={
+              <ul className="space-y-1.5">
+                <li>• 各職員に設定した「最低勤務日数」「連続勤務上限」などのルールに違反がないかを自動チェックします</li>
+                <li>• 赤：エラー（必ず修正が必要）</li>
+                <li>• 黄：警告（確認を推奨）</li>
+                <li>• クリックすると詳細の一覧が表示されます</li>
+              </ul>
+            }
+          />
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -891,18 +916,28 @@ export default function ShiftCalendarPage() {
         </div>
 
         {/* Action buttons */}
-        <button
-          onClick={() => setAutoScheduleOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-all shadow-sm"
-          title="条件設定をもとにシフトを自動生成"
-        >
-          <Wand2 className="w-3.5 h-3.5" />
-          一括作成
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setAutoScheduleOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-all shadow-sm"
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+            一括作成
+          </button>
+          <HintTooltip
+            title="一括作成とは？"
+            content={
+              <ul className="space-y-1.5">
+                <li>• 条件（早番3名・遅番2名など）を設定するだけで、1ヶ月分のシフトを自動生成します</li>
+                <li>• 手動で入力済みの部分を残す「補完モード」と全て作り直す「上書きモード」から選べます</li>
+                <li>• 生成後はプレビューで確認してから適用できます</li>
+              </ul>
+            }
+          />
+        </div>
         <button
           onClick={() => setShowCopyModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
-          title="前月のシフトをコピー"
         >
           <Copy className="w-3.5 h-3.5" />
           前月コピー
@@ -961,9 +996,24 @@ export default function ShiftCalendarPage() {
         >
           {/* Rail header */}
           <div className="px-3 pt-3 pb-2 border-b border-gray-100 shrink-0 flex items-center justify-between gap-1">
-            <div>
-              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">スタッフ</p>
-              <p className="text-[10px] text-gray-400">ドラッグして配置</p>
+            <div className="flex items-center gap-1">
+              <div>
+                <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">スタッフ</p>
+                <p className="text-[10px] text-gray-400">ドラッグして配置</p>
+              </div>
+              <HintTooltip
+                title="シフトの配置方法"
+                content={
+                  <ul className="space-y-1.5">
+                    <li>• カードをカレンダーの日付マスに<strong className="text-white">ドラッグ</strong>してシフトを配置します</li>
+                    <li>• 下のパターン選択で「早番」「遅番」などを選んでからドラッグすると、そのパターンで配置されます</li>
+                    <li>• 同じ職員を同じ日に<strong className="text-white">別のパターンで複数回</strong>配置することもできます</li>
+                    <li>• 配置済みのカードをクリック → パターン変更、×ボタン → 削除</li>
+                    <li>• カードにカーソルを乗せると<strong className="text-white">月間入力</strong>ボタンが表示され、1ヶ月分を一括で設定できます</li>
+                  </ul>
+                }
+                className="ml-0.5"
+              />
             </div>
             <button
               onClick={() => openStaffPanel(null)}
@@ -1081,7 +1131,20 @@ export default function ShiftCalendarPage() {
 
           {/* Active pattern selector */}
           <div className="px-2 pb-3 pt-2 border-t border-gray-100 shrink-0">
-            <p className="text-[10px] font-semibold text-gray-500 mb-1.5">ドラッグ時のパターン：</p>
+            <div className="flex items-center gap-1 mb-1.5">
+              <p className="text-[10px] font-semibold text-gray-500">ドラッグ時のパターン：</p>
+              <HintTooltip
+                title="シフトパターンとは？"
+                content={
+                  <ul className="space-y-1.5">
+                    <li>• ドラッグして配置する際のシフト種別をここで選択します</li>
+                    <li>• <strong className="text-white">早番</strong>（07:00〜）・<strong className="text-white">中番</strong>（09:00〜）・<strong className="text-white">遅番</strong>（11:00〜）など時間帯別に選べます</li>
+                    <li>• 同じ人に別パターンを配置すると、1日に複数のシフトを重ねられます</li>
+                    <li>• 「休み」「有給」なども配置可能です</li>
+                  </ul>
+                }
+              />
+            </div>
             <div className="flex flex-wrap gap-1">
               {shiftPatterns.filter((p) => !p.isOff).map((p) => (
                 <button
