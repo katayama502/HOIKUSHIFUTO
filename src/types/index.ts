@@ -67,12 +67,16 @@ export const STAFF_COLORS = [
   '#fbbf24', '#f87171', '#2dd4bf', '#818cf8', '#4ade80',
 ]
 
+export type DashboardCardId = 'stats' | 'today' | 'progress' | 'hours' | 'quickActions' | 'calendar'
+export interface DashboardCard { id: DashboardCardId; visible: boolean }
+
 export interface UISettings {
   theme: 'warm' | 'cool' | 'green' | 'purple'
   density: 'compact' | 'normal' | 'spacious'
   fontSize: 'small' | 'medium' | 'large'
   showWeekends: boolean
   sidebarCollapsed: boolean
+  dashboardCards: DashboardCard[]
 }
 
 export interface StaffConstraint {
