@@ -34,6 +34,7 @@ interface AppState {
 
   setShiftEntry: (yearMonth: string, staffId: string, day: string, entry: { patternId: string; note: string }) => void
   clearShiftEntry: (yearMonth: string, staffId: string, day: string) => void
+  setBulkMonthShifts: (yearMonth: string, monthShifts: Record<string, Record<string, { patternId: string; note: string }>>) => void
 
   addLeaveRequest: (r: LeaveRequest) => void
   updateLeaveRequest: (id: string, r: Partial<LeaveRequest>) => void
@@ -154,6 +155,13 @@ export const useStore = create<AppState>()(
         monthData[staffId] = staffData
         return { shifts: { ...state.shifts, [yearMonth]: monthData } }
       }),
+
+      setBulkMonthShifts: (yearMonth, monthShifts) => set((state) => ({
+        shifts: {
+          ...state.shifts,
+          [yearMonth]: monthShifts,
+        },
+      })),
 
       addLeaveRequest: (r) => set((state) => ({ leaveRequests: [...state.leaveRequests, r] })),
       updateLeaveRequest: (id, r) => set((state) => ({
