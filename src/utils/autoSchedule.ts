@@ -28,6 +28,40 @@ export interface AutoScheduleStats {
 
 // ─── Main function ────────────────────────────────────────────────────────────
 
+// ─── Helper: derive previous yearMonth string ────────────────────────────────
+
+export function getPrevYearMonth(yearMonth: string): string {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const d = new Date(y, m - 1, 1)
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+// ─── Helper: build "dominant pattern" map from a month's shifts ─────────────
+// Returns staffId → patternId (the pattern used most often that month, work only)
+
+export function buildPrevMonthPatternMap(
+  prevYearMonth: string,
+  staff: Staff[],
+  patterns: ShiftPattern[],
+  shifts: ShiftData,
+): Record<string, string> {
+  const patternMap = Object.fromEntries(patterns.map((p) => [p.id, p]))
+  const result: Record<string, string> = {}
+
+  for (const s of staff) {
+    const days = shifts[prevYearMonth]?.[s.id] ?? {}
+    const freq: Record<string, number> = {}
+    for (const entry of Object.values(days)) {
+      const p = patternMap[entry.patternId]
+      if (p && !p.isOff) freq[entry.patternId] = (freq[entry.patternId] ?? 0) + 1
+    }
+    const best = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]
+    if (best) result[s.id] = best[0]
+  }
+  return result
+}
+
 export function autoGenerateShifts(
   yearMonth: string,
   mode: AutoScheduleMode,
@@ -37,6 +71,8 @@ export function autoGenerateShifts(
   classRooms: ClassRoom[],
   constraints: Record<string, StaffConstraint>,
   existingShifts: ShiftData,
+  /** 前月実績パターンマップ: staffId → dominant patternId (省略可) */
+  prevMonthPatterns?: Record<string, string>,
 ): AutoScheduleResult {
 
   const daysInMonth = getDaysInMonth(parseISO(`${yearMonth}-01`))
@@ -144,13 +180,16 @@ export function autoGenerateShifts(
           const minDays = c?.minDaysPerMonth ?? 0
           const prefersThis = c?.preferredPatternIds?.includes(patternId) ?? false
           const needsMoreDays = currentWorkDays < minDays
+          // 前月の実績パターンと一致するか（希望未設定の場合に有効）
+          const prevPattern = prevMonthPatterns?.[s.id]
+          const matchesPrev = !!prevPattern && prevPattern === patternId && !prefersThis
 
           // Score: higher → chosen first
           let score = 0
-          if (prefersThis) score += 200
+          if (prefersThis) score += 200            // 希望パターン最優先
+          else if (matchesPrev) score += 150        // 前月実績（希望未設定時）
           if (needsMoreDays) score += 100 + (minDays - currentWorkDays) * 10
           score -= currentWorkDays * 3  // fewer days so far → higher priority
-          // Break ties by staff index for determinism
           return { s, score }
         })
         .sort((a, b) => b.score - a.score)
