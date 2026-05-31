@@ -510,9 +510,9 @@ export default function ShiftCalendarPage() {
     // Height: week view taller, mobile slightly shorter than desktop
     let minH: string
     if (isWeekView) {
-      minH = 'min-h-[100px] md:min-h-[180px]'
+      minH = 'min-h-[110px] md:min-h-[200px]'
     } else {
-      minH = 'min-h-[80px] md:min-h-[110px]'
+      minH = 'min-h-[88px] md:min-h-[128px]'
     }
 
     return (
@@ -563,8 +563,8 @@ export default function ShiftCalendarPage() {
           )}
         </div>
 
-        {/* Staff chips */}
-        <div className="flex flex-col gap-0.5 flex-1">
+        {/* Staff cards — each placed staff as a contained card */}
+        <div className="flex flex-col gap-1 flex-1">
           {placedStaff.map(({ staff: s, pattern }) => {
             const chipStatus = getChipConstraintStatus(s.id, date, dayStr)
             const isSelectedChip = selectedStaffId === s.id
@@ -572,12 +572,9 @@ export default function ShiftCalendarPage() {
             return (
               <div
                 key={s.id}
-                // Desktop: draggable chip
                 draggable={!isMobile}
                 onDragStart={!isMobile ? (e) => handleChipDragStart(e, s.id, pattern.id, cellYM, dayStr) : undefined}
                 onDragEnd={!isMobile ? handleDragEnd : undefined}
-                // Desktop: open popover on click
-                // Mobile: open bottom sheet on tap
                 onClick={(e) => {
                   e.stopPropagation()
                   if (isMobile) {
@@ -586,54 +583,61 @@ export default function ShiftCalendarPage() {
                     openPopover(e, s.id, dayStr)
                   }
                 }}
-                className={`group flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[9px] font-medium ${
-                  isMobile ? 'cursor-pointer active:scale-95' : 'cursor-grab active:cursor-grabbing'
-                } select-none transition-all hover:opacity-90 ${
-                  isSelectedChip ? 'ring-2 ring-offset-0' : ''
-                } ${
-                  chipStatus === 'error' ? 'ring-1 ring-red-400' :
-                  chipStatus === 'warn' ? 'ring-1 ring-amber-400' : ''
+                className={`group rounded-lg overflow-hidden select-none transition-all ${
+                  isMobile ? 'cursor-pointer active:scale-95' : 'cursor-grab active:cursor-grabbing hover:shadow-md'
                 }`}
                 style={{
                   backgroundColor: pattern.bgColor,
-                  color: pattern.color,
-                  ...(isSelectedChip ? { ringColor: s.color } : {}),
+                  borderLeft: `3px solid ${s.color}`,
+                  boxShadow: isSelectedChip
+                    ? `0 0 0 2px ${s.color}, 0 2px 6px ${s.color}30`
+                    : chipStatus === 'error'
+                      ? '0 0 0 1.5px #ef4444'
+                      : chipStatus === 'warn'
+                        ? '0 0 0 1.5px #f59e0b'
+                        : `0 1px 3px ${s.color}20`,
                 }}
-                title={`${s.name} — ${pattern.name}${chipStatus !== 'ok' ? '\n⚠ 制約違反あり' : ''}`}
+                title={`${s.name} — ${pattern.name}${chipStatus !== 'ok' ? '\n⚠ 制約違反あり' : ''}\nクリックでパターン変更`}
               >
-                {/* Avatar circle */}
-                <span
-                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold shrink-0"
-                  style={{ backgroundColor: s.color, fontSize: 7 }}
-                >
-                  {s.name[0]}
-                </span>
-                {/* Name (first name only) */}
-                <span className="truncate max-w-[28px] md:max-w-[38px]">{s.name.split(/[\s　]/)[0]}</span>
-                {/* Pattern badge — hidden on very small cells on mobile */}
-                <span
-                  className="hidden md:inline shrink-0 text-[8px] font-bold px-0.5 rounded ml-0.5"
-                  style={{ backgroundColor: pattern.color + '33', color: pattern.color }}
-                >
-                  {pattern.name}
-                </span>
-                {/* Warning icon */}
-                {chipStatus !== 'ok' && (
-                  <AlertTriangle className="w-2.5 h-2.5 shrink-0 ml-auto opacity-70" />
-                )}
-                {/* Remove X (desktop hover only) */}
-                {!isMobile && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      clearShiftEntry(cellYM, s.id, dayStr)
-                    }}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto text-current hover:text-red-500"
-                    title="削除"
+                <div className="flex items-center gap-1 px-1 py-1 md:px-1.5">
+                  {/* Avatar */}
+                  <span
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                    style={{ backgroundColor: s.color, fontSize: 7 }}
                   >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                )}
+                    {s.name[0]}
+                  </span>
+                  {/* Name — shown on desktop */}
+                  <span
+                    className="hidden md:block truncate flex-1 text-[9px] font-semibold leading-tight"
+                    style={{ color: pattern.color }}
+                  >
+                    {s.name.split(/[\s　]/)[0]}
+                  </span>
+                  {/* Pattern name — always visible */}
+                  <span
+                    className="shrink-0 text-[8px] md:text-[9px] font-bold leading-tight"
+                    style={{ color: pattern.color }}
+                  >
+                    {pattern.name}
+                  </span>
+                  {/* Warning */}
+                  {chipStatus !== 'ok' && (
+                    <AlertTriangle
+                      className={`w-2 h-2 shrink-0 ${chipStatus === 'error' ? 'text-red-500' : 'text-amber-500'}`}
+                    />
+                  )}
+                  {/* Remove — desktop hover */}
+                  {!isMobile && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); clearShiftEntry(cellYM, s.id, dayStr) }}
+                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto hover:text-red-500"
+                      title="削除"
+                    >
+                      <X className="w-2.5 h-2.5 text-current" />
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -948,6 +952,24 @@ export default function ShiftCalendarPage() {
                       <div className="text-[10px] text-gray-400">{stats.workDays}日 / {stats.totalHours.toFixed(0)}h</div>
                     </div>
                   </div>
+                  {/* Preferred patterns */}
+                  {(staffConstraints[s.id]?.preferredPatternIds?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-0.5 mt-1.5">
+                      {staffConstraints[s.id].preferredPatternIds.slice(0, 4).map((pid) => {
+                        const p = patternMap[pid]
+                        if (!p) return null
+                        return (
+                          <span
+                            key={pid}
+                            className="text-[8px] font-bold px-1.5 py-0.5 rounded-md"
+                            style={{ backgroundColor: p.bgColor, color: p.color }}
+                          >
+                            {p.name}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
                   {/* Today pattern badge */}
                   {todayPattern && (
                     <div
@@ -1048,56 +1070,86 @@ export default function ShiftCalendarPage() {
       </div>
 
       {/* ══════════════════ MOBILE BOTTOM SHEET — chip action ══════════════════ */}
-      {mobileChipSheet && (
-        <div
-          className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
-          onClick={() => setMobileChipSheet(null)}
-        >
+      {mobileChipSheet && (() => {
+        const sheetStaff = staff.find((s) => s.id === mobileChipSheet.staffId)
+        const currentPatternId = shifts[mobileChipSheet.ym]?.[mobileChipSheet.staffId]?.[mobileChipSheet.day]?.patternId
+        return (
           <div
-            className="bg-white rounded-t-3xl p-5 space-y-3"
-            onClick={(e) => e.stopPropagation()}
+            className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-[2px]"
+            onClick={() => setMobileChipSheet(null)}
           >
-            {/* Handle bar */}
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
-            <p className="font-bold text-gray-800 text-center">
-              {staff.find((s) => s.id === mobileChipSheet.staffId)?.name} — {mobileChipSheet.day}日
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {shiftPatterns.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day, { patternId: p.id, note: '' })
-                    setMobileChipSheet(null)
-                  }}
-                  className="py-3 rounded-xl font-medium text-sm border-2 active:scale-95 transition-all"
-                  style={{
-                    backgroundColor: p.bgColor,
-                    color: p.color,
-                    borderColor: p.color + '60',
-                  }}
-                >
-                  {p.name}
-                  {!p.isOff && (
-                    <span className="block text-[10px] opacity-70">{p.startTime}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                clearShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day)
-                setMobileChipSheet(null)
-              }}
-              className="w-full py-3 rounded-xl bg-red-50 text-red-500 font-medium flex items-center justify-center gap-2 active:scale-95 transition-all border border-red-100"
+            <div
+              className="bg-white rounded-t-3xl px-5 pt-3 pb-4 space-y-3"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="w-4 h-4" /> 削除
-            </button>
-            {/* Safe area bottom padding */}
-            <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+              {/* Handle */}
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto" />
+
+              {/* Staff header */}
+              <div className="flex items-center gap-3">
+                {sheetStaff && (
+                  <div
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-white text-base font-bold shrink-0"
+                    style={{ backgroundColor: sheetStaff.color }}
+                  >
+                    {sheetStaff.name[0]}
+                  </div>
+                )}
+                <div>
+                  <p className="font-bold text-gray-800">{sheetStaff?.name}</p>
+                  <p className="text-xs text-gray-400">{mobileChipSheet.day}日 — シフトパターンを選択</p>
+                </div>
+              </div>
+
+              {/* Pattern grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {shiftPatterns.map((p) => {
+                  const isCurrent = p.id === currentPatternId
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day, { patternId: p.id, note: '' })
+                        setMobileChipSheet(null)
+                      }}
+                      className="py-3 px-3 rounded-2xl font-semibold text-sm border-2 active:scale-95 transition-all text-left relative"
+                      style={{
+                        backgroundColor: p.bgColor,
+                        color: p.color,
+                        borderColor: isCurrent ? p.color : p.color + '40',
+                        boxShadow: isCurrent ? `0 0 0 2px ${p.color}` : undefined,
+                      }}
+                    >
+                      {isCurrent && (
+                        <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-white flex items-center justify-center shadow-sm" style={{ color: p.color }}>
+                          <Check className="w-2.5 h-2.5" />
+                        </span>
+                      )}
+                      <span className="block font-bold">{p.name}</span>
+                      {!p.isOff
+                        ? <span className="text-[10px] opacity-70">{p.startTime} – {p.endTime}</span>
+                        : <span className="text-[10px] opacity-60">終日休み</span>
+                      }
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Delete */}
+              <button
+                onClick={() => {
+                  clearShiftEntry(mobileChipSheet.ym, mobileChipSheet.staffId, mobileChipSheet.day)
+                  setMobileChipSheet(null)
+                }}
+                className="w-full py-3 rounded-2xl bg-red-50 text-red-500 font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all border border-red-100"
+              >
+                <X className="w-4 h-4" /> このシフトを削除
+              </button>
+              <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ══════════════════ DESKTOP PATTERN CHANGE POPOVER ══════════════════ */}
       {/* ══════════════════ MOBILE BOTTOM TRAY (< md) ══════════════════ */}
@@ -1318,6 +1370,24 @@ export default function ShiftCalendarPage() {
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${s.employment === 'fulltime' ? 'bg-sky-100 text-sky-600' : 'bg-violet-100 text-violet-600'}`}>
                           {s.employment === 'fulltime' ? '正' : 'P'}
                         </span>
+                        {/* Preferred patterns */}
+                        {(staffConstraints[s.id]?.preferredPatternIds?.length ?? 0) > 0 && (
+                          <div className="flex flex-wrap justify-center gap-0.5 mt-0.5 w-full px-0.5">
+                            {staffConstraints[s.id].preferredPatternIds.slice(0, 2).map((pid) => {
+                              const p = patternMap[pid]
+                              if (!p) return null
+                              return (
+                                <span
+                                  key={pid}
+                                  className="text-[7px] font-bold px-1 py-0.5 rounded-md leading-tight"
+                                  style={{ backgroundColor: p.bgColor, color: p.color }}
+                                >
+                                  {p.name}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
                       </button>
                     </div>
                   )
