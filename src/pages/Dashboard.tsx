@@ -34,7 +34,7 @@ const DEFAULT_CARDS: DashboardCard[] = [
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { staff, shifts, shiftPatterns, orgSettings, uiSettings, updateUISettings } = useStore()
+  const { staff, shifts, shiftPatterns, staffConstraints, orgSettings, uiSettings, updateUISettings } = useStore()
   const today = new Date()
   const yearMonth = getYearMonth(today)
   const fullMonthLabel = format(today, 'yyyy年M月', { locale: ja })
@@ -93,6 +93,22 @@ export default function Dashboard() {
 
   const staffCount = staff.length
   const totalCells = staffCount * daysInMonth
+
+  // ── Setup checklist ──────────────────────────────────────────────────────────
+  const hasCustomStaff = staff.some(s => !['s1', 's2', 's3', 's4', 's5'].includes(s.id))
+  const allHaveConstraints = staff.length > 0 && staff.every(s => !!staffConstraints[s.id])
+  const currentYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const hasCurrentMonthShifts = Object.keys(shifts[currentYearMonth] ?? {}).length > 0
+
+  const setupSteps = [
+    { label: '職員を登録する', done: hasCustomStaff, hint: '「シフトカレンダー」→「職員を追加」から登録できます' },
+    { label: '出勤条件を設定する（曜日・シフト制限）', done: allHaveConstraints, hint: 'ナビの「出勤条件」から各職員の設定ができます。管理職は早番・遅番を除外することを推奨します' },
+    { label: '今月のシフトを作成する', done: hasCurrentMonthShifts, hint: '「シフトカレンダー」→「一括シフト作成」で自動生成できます' },
+  ]
+
+  const completedSteps = setupSteps.filter(s => s.done).length
+  const allDone = completedSteps === setupSteps.length
+
   const filledCells = useMemo(() => {
     let count = 0
     for (let d = 1; d <= daysInMonth; d++) {
@@ -346,6 +362,40 @@ export default function Dashboard() {
               <Check className="w-3.5 h-3.5" />
               完了
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Setup checklist */}
+      {!allDone && (
+        <div className="card mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-bold text-gray-800">🚀 初期設定ガイド</h3>
+              <p className="text-xs text-gray-500">{completedSteps}/{setupSteps.length} 完了</p>
+            </div>
+            {/* プログレスバー */}
+            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary-400 rounded-full transition-all"
+                style={{ width: `${(completedSteps / setupSteps.length) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            {setupSteps.map((step, i) => (
+              <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${step.done ? 'bg-green-50' : 'bg-gray-50'}`}>
+                <div className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${step.done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                  {step.done ? '✓' : i + 1}
+                </div>
+                <div>
+                  <p className={`text-sm font-medium ${step.done ? 'text-green-700 line-through' : 'text-gray-700'}`}>
+                    {step.label}
+                  </p>
+                  {!step.done && <p className="text-xs text-gray-400 mt-0.5">{step.hint}</p>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

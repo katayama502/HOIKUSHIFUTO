@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'staff'
+export type Role = 'admin' | 'manager' | 'staff'
 export type Employment = 'fulltime' | 'parttime'
 
 export interface Staff {
@@ -87,4 +87,5 @@ export interface StaffConstraint {
   maxDaysPerMonth: number       // 月の最大出勤日数（31=制限なし）
   preferredPatternIds: string[] // 希望するシフトパターンID一覧
   maxConsecutiveDays: number    // 最大連続勤務日数（デフォルト5）
+  restrictedPatternIds: string[] // 自動配置から除外するシフトパターンID
 }

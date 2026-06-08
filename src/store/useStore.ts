@@ -114,7 +114,31 @@ export const useStore = create<AppState>()(
       updateOrgSettings: (s) => set((state) => ({ orgSettings: { ...state.orgSettings, ...s } })),
       updateUISettings: (s) => set((state) => ({ uiSettings: { ...state.uiSettings, ...s } })),
 
-      addStaff: (s) => set((state) => ({ staff: [...state.staff, s] })),
+      addStaff: (s) => set((state) => {
+        // ロールに基づくデフォルトの制約パターン除外
+        const restrictedPatternIds = (s.role === 'admin' || s.role === 'manager')
+          ? ['early', 'late']  // 管理職は早番・遅番の自動配置から除外
+          : []
+
+        const defaultConstraint: StaffConstraint = {
+          staffId: s.id,
+          availableDays: [1, 2, 3, 4, 5],  // 平日のみ（月〜金）
+          unavailableDates: [],
+          minDaysPerMonth: s.employment === 'fulltime' ? 20 : 0,
+          maxDaysPerMonth: s.employment === 'fulltime' ? 23 : 15,
+          preferredPatternIds: [],
+          maxConsecutiveDays: 5,
+          restrictedPatternIds,
+        }
+
+        return {
+          staff: [...state.staff, s],
+          staffConstraints: {
+            ...state.staffConstraints,
+            [s.id]: defaultConstraint,
+          },
+        }
+      }),
       updateStaff: (id, s) => set((state) => ({
         staff: state.staff.map((st) => st.id === id ? { ...st, ...s } : st),
       })),
@@ -193,6 +217,7 @@ export const useStore = create<AppState>()(
               maxDaysPerMonth: 31,
               preferredPatternIds: [],
               maxConsecutiveDays: 5,
+              restrictedPatternIds: [],
             }),
             ...constraint,
             staffId,

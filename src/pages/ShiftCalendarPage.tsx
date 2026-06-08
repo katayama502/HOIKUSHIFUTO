@@ -478,6 +478,9 @@ export default function ShiftCalendarPage() {
     setShowCopyModal(false)
   }
 
+  // ─── Current month shift entries ─────────────────────────────────────────
+  const currentMonthShifts = shifts[yearMonth] ?? {}
+
   // ─── Progress bar ────────────────────────────────────────────────────────
   const progressPct = totalWorkingDays > 0
     ? Math.round((filledDays / totalWorkingDays) * 100)
@@ -788,7 +791,7 @@ export default function ShiftCalendarPage() {
             title="一括作成"
             content={
               <ul className="space-y-1.5">
-                <li>• 1ヶ月分のシフトを自動生成します</li>
+                <li>• 出勤条件（曜日・パターン制限）を考慮して自動配置します。管理職は早番・遅番に配置されません。</li>
                 <li>• 各パターンに何名配置するか設定するだけ</li>
                 <li>• 生成前にプレビューで確認できます</li>
               </ul>
@@ -928,7 +931,7 @@ export default function ShiftCalendarPage() {
             title="一括作成とは？"
             content={
               <ul className="space-y-1.5">
-                <li>• 条件（早番3名・遅番2名など）を設定するだけで、1ヶ月分のシフトを自動生成します</li>
+                <li>• 出勤条件（曜日・パターン制限）を考慮して自動配置します。管理職は早番・遅番に配置されません。</li>
                 <li>• 手動で入力済みの部分を残す「補完モード」と全て作り直す「上書きモード」から選べます</li>
                 <li>• 生成後はプレビューで確認してから適用できます</li>
               </ul>
@@ -1175,6 +1178,41 @@ export default function ShiftCalendarPage() {
 
         {/* ══ CALENDAR GRID (both mobile and desktop) ══ */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white">
+
+          {/* 初回ガイダンス: 職員未登録 */}
+          {staff.length === 0 && (
+            <div className="mx-3 mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center shrink-0">
+              <p className="text-sm font-bold text-amber-800 mb-1">まず職員を登録してください</p>
+              <p className="text-xs text-amber-600">右下の「職員を追加」ボタンから職員情報を入力できます</p>
+            </div>
+          )}
+
+          {/* 初回ガイダンス: シフトが空の場合 */}
+          {Object.keys(currentMonthShifts).length === 0 && staff.length > 0 && (
+            <div className="mx-3 mt-3 bg-gradient-to-r from-primary-50 to-sky-50 border border-primary-100 rounded-2xl p-4 shrink-0">
+              <p className="text-sm font-bold text-primary-800 mb-2">📋 シフトを作成しましょう</p>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                  <span>職員の登録が完了しています（{staff.length}名）</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="w-5 h-5 rounded-full bg-primary-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
+                  <span>出勤条件を確認してください（ナビ→「出勤条件」）</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="w-5 h-5 rounded-full bg-gray-300 text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
+                  <span>「一括シフト作成」ボタンでシフトを自動生成できます</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setAutoScheduleOpen(true)}
+                className="mt-3 w-full py-2.5 rounded-xl bg-primary-500 text-white text-sm font-bold active:scale-95 transition-all"
+              >
+                ✨ 一括シフト作成を開く
+              </button>
+            </div>
+          )}
 
           {/* Day-of-week header */}
           <div className="grid grid-cols-7 border-b border-gray-100 shrink-0">

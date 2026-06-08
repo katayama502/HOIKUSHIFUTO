@@ -4,6 +4,8 @@ import { useStore } from '../store/useStore'
 import { STAFF_COLORS } from '../types'
 import type { Staff, Employment, Role } from '../types'
 
+const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
+
 interface Props {
   open: boolean
   staffId: string | null   // null = 新規追加モード
@@ -21,13 +23,14 @@ const emptyForm: Omit<Staff, 'id'> = {
 }
 
 export default function StaffPanel({ open, staffId, onClose, onOpenConstraints }: Props) {
-  const { staff, addStaff, updateStaff, deleteStaff } = useStore()
+  const { staff, addStaff, updateStaff, deleteStaff, staffConstraints, setStaffConstraint } = useStore()
   const isNew = staffId === null
   const target = staff.find((s) => s.id === staffId) ?? null
 
   const [form, setForm] = useState<Omit<Staff, 'id'>>(emptyForm)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [availDays, setAvailDays] = useState<number[]>([1, 2, 3, 4, 5])
 
   // フォームをリセット（パネルが開くたびに）
   useEffect(() => {
@@ -41,6 +44,7 @@ export default function StaffPanel({ open, staffId, onClose, onOpenConstraints }
         ...emptyForm,
         color: STAFF_COLORS[staff.length % STAFF_COLORS.length],
       })
+      setAvailDays([1, 2, 3, 4, 5])
     } else if (target) {
       setForm({
         name: target.name,
@@ -50,15 +54,20 @@ export default function StaffPanel({ open, staffId, onClose, onOpenConstraints }
         color: target.color,
         note: target.note,
       })
+      const existing = staffConstraints[target.id]
+      setAvailDays(existing?.availableDays ?? [1, 2, 3, 4, 5])
     }
   }, [open, staffId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
     if (!form.name.trim()) return
+    const id = isNew ? `s_${Date.now()}` : target!.id
     if (isNew) {
-      addStaff({ ...form, id: `s_${Date.now()}` })
+      addStaff({ ...form, id })
+      setStaffConstraint(id, { availableDays: availDays })
     } else if (target) {
       updateStaff(target.id, form)
+      setStaffConstraint(target.id, { availableDays: availDays })
     }
     setSaved(true)
     setTimeout(() => {
@@ -179,7 +188,8 @@ export default function StaffPanel({ open, staffId, onClose, onOpenConstraints }
                 onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
               >
                 <option value="staff">職員</option>
-                <option value="admin">管理者</option>
+                <option value="manager">主任・副主任</option>
+                <option value="admin">管理者（理事長・園長）</option>
               </select>
             </div>
             <div>
@@ -196,6 +206,42 @@ export default function StaffPanel({ open, staffId, onClose, onOpenConstraints }
                 <option value="parttime">パート</option>
               </select>
             </div>
+          </div>
+
+          {/* 管理職ヒント */}
+          {(form.role === 'admin' || form.role === 'manager') && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-1">
+              管理職は自動シフト作成時、早番・遅番には配置されません
+            </p>
+          )}
+
+          {/* 出勤可能曜日 */}
+          <div>
+            <label className="label">出勤可能曜日</label>
+            <div className="flex gap-1.5 mt-1.5">
+              {DAY_LABELS.map((label, dow) => (
+                <button
+                  key={dow}
+                  type="button"
+                  onClick={() => {
+                    const next = availDays.includes(dow)
+                      ? availDays.filter(d => d !== dow)
+                      : [...availDays, dow].sort((a, b) => a - b)
+                    setAvailDays(next)
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                    availDays.includes(dow)
+                      ? dow === 0 || dow === 6
+                        ? 'bg-red-100 text-red-600 ring-1 ring-red-300'
+                        : 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">土日は通常、自動配置から除外することを推奨します</p>
           </div>
 
           {/* 週所定時間・メモ */}

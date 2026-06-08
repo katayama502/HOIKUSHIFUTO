@@ -46,6 +46,7 @@ const DEFAULT_CONSTRAINT: Omit<StaffConstraint, 'staffId'> = {
   maxDaysPerMonth: 31,
   preferredPatternIds: [],
   maxConsecutiveDays: 5,
+  restrictedPatternIds: [],
 }
 
 // ────────────────────────────────────────────
@@ -181,6 +182,19 @@ export default function StaffConstraintPage() {
     })
   }, [])
 
+  // ────────── クイックプリセット ──────────
+  function applyPreset(type: 'fulltime' | 'manager' | 'parttime') {
+    if (!selectedStaff) return
+    if (type === 'fulltime') {
+      setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 20, maxDaysPerMonth: 23, maxConsecutiveDays: 5, restrictedPatternIds: [] }))
+    } else if (type === 'manager') {
+      setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 20, maxDaysPerMonth: 23, maxConsecutiveDays: 5, restrictedPatternIds: ['early', 'late'] }))
+    } else if (type === 'parttime') {
+      const suggested = Math.round((selectedStaff.weeklyHours / 8) * 4)
+      setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 0, maxDaysPerMonth: suggested + 2, maxConsecutiveDays: 3, restrictedPatternIds: [] }))
+    }
+  }
+
   // ────────── スタッフ切り替え ──────────
   function selectStaff(id: string) {
     setSelectedStaffId(id)
@@ -224,6 +238,14 @@ export default function StaffConstraintPage() {
             保存しました
           </span>
         )}
+      </div>
+
+      {/* 説明テキスト */}
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
+        <p className="text-sm text-blue-800 leading-relaxed">
+          ここで設定した条件は「一括シフト作成」時に自動的に反映されます。<br />
+          <span className="font-semibold">特に「出勤可能曜日」が未設定だと土日にも配置される場合があります。</span>
+        </p>
       </div>
 
       {/* ────────── スタッフタブ ────────── */}
@@ -273,6 +295,22 @@ export default function StaffConstraintPage() {
             )}
           </div>
 
+          {/* クイックプリセット */}
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2 font-medium">クイック設定</p>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => applyPreset('fulltime')} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-all">
+                📅 正社員（平日フル）
+              </button>
+              <button onClick={() => applyPreset('manager')} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition-all">
+                👔 管理職（通常・中番のみ）
+              </button>
+              <button onClick={() => applyPreset('parttime')} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all">
+                🕐 パートタイム
+              </button>
+            </div>
+          </div>
+
           {/* ────────── セクション1: 出勤可能曜日 ────────── */}
           <section className="card p-4 md:p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -302,10 +340,7 @@ export default function StaffConstraintPage() {
               })}
             </div>
             {form.availableDays.length === 0 && (
-              <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                出勤可能曜日が設定されていません
-              </p>
+              <p className="text-xs text-red-500 mt-1">⚠️ 曜日が選択されていません。一括設定で全日配置される可能性があります。</p>
             )}
           </section>
 
@@ -605,6 +640,37 @@ export default function StaffConstraintPage() {
                 未選択の場合、すべてのパターンが均等に使用されます
               </p>
             )}
+          </section>
+
+          {/* ────────── セクション6: 自動配置除外パターン ────────── */}
+          <section className="card p-4 md:p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 bg-primary-400 rounded-full" />
+              <h2 className="font-bold text-gray-700 text-base">自動配置から除外するシフト</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">チェックしたシフトは「一括設定」で自動的に配置されません</p>
+            <div className="grid grid-cols-2 gap-2">
+              {shiftPatterns.filter((p) => !p.isOff).map((p) => (
+                <label key={p.id} className="flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={form.restrictedPatternIds?.includes(p.id) ?? false}
+                    onChange={(e) => {
+                      const current = form.restrictedPatternIds ?? []
+                      setForm((prev) => ({
+                        ...prev,
+                        restrictedPatternIds: e.target.checked
+                          ? [...current, p.id]
+                          : current.filter((id) => id !== p.id),
+                      }))
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-xs font-medium" style={{ color: p.color }}>{p.name}</span>
+                  <span className="text-xs text-gray-400">{p.startTime}〜{p.endTime}</span>
+                </label>
+              ))}
+            </div>
           </section>
 
           {/* ────────── アクションボタン ────────── */}
