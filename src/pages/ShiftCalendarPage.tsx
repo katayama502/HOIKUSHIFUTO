@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
   Printer, Download, ChevronDown, ChevronUp, Check, X,
-  Copy, UserPlus, Pencil, Wand2, LayoutGrid,
+  Copy, UserPlus, Pencil, Wand2, LayoutGrid, Trash2,
 } from 'lucide-react'
 import { format, addMonths, subMonths, getDay, getDaysInMonth, parseISO, addWeeks, subWeeks } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -101,7 +101,7 @@ function countWorkingDays(yearMonth: string): number {
 export default function ShiftCalendarPage() {
   const {
     staff, shiftPatterns, shifts, classRooms,
-    setShiftEntry, clearShiftSlot,
+    setShiftEntry, clearShiftSlot, setBulkMonthShifts,
   } = useStore()
   const staffConstraints = useStore((s) => s.staffConstraints) ?? {}
 
@@ -149,6 +149,14 @@ export default function ShiftCalendarPage() {
 
   // Auto-schedule modal
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false)
+
+  // Clear month modal
+  const [showClearModal, setShowClearModal] = useState(false)
+
+  function handleClearMonth() {
+    setBulkMonthShifts(yearMonth, {})
+    setShowClearModal(false)
+  }
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false)
@@ -787,6 +795,14 @@ export default function ShiftCalendarPage() {
             <Wand2 className="w-3.5 h-3.5" />
             一括
           </button>
+          {/* Clear month */}
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-50 border border-red-200 active:scale-95 transition-all"
+            title="今月のシフトを全クリア"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+          </button>
           <HintTooltip
             title="一括作成"
             content={
@@ -958,6 +974,13 @@ export default function ShiftCalendarPage() {
         >
           <Printer className="w-3.5 h-3.5" />
           印刷
+        </button>
+        <button
+          onClick={() => setShowClearModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-red-200 text-red-500 hover:bg-red-50 active:scale-95 transition-all"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          全クリア
         </button>
       </div>
 
@@ -1726,6 +1749,40 @@ export default function ShiftCalendarPage() {
             <X className="w-3.5 h-3.5" />
             削除
           </button>
+        </div>
+      )}
+
+      {/* ══════════════════ CLEAR MONTH MODAL ══════════════════ */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 w-80 mx-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
+              <h2 className="text-base font-bold text-gray-800">シフトを全て削除</h2>
+            </div>
+            <p className="text-sm text-gray-700 mb-1">
+              <span className="font-semibold">{ymMonth}月のシフトを全て削除</span>します。
+            </p>
+            <p className="text-sm text-red-500 mb-6">
+              この操作は取り消せません。
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 hover:bg-gray-100 active:scale-95 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleClearMonth}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 active:scale-95 transition-all shadow-sm"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
