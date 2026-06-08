@@ -9,6 +9,7 @@ import { useStore } from '../store/useStore'
 import {
   getYearMonth, getDaysArray, getWeekDays, formatDayHeader,
   calcWorkHours, generateShiftCSV, generateShiftExcel, downloadFile,
+  getDaySlots,
 } from '../utils/shift'
 import { AGE_RATIO } from '../types'
 
@@ -70,12 +71,14 @@ export default function ShiftPage() {
     const counts: Record<string, number> = {}
     days.forEach((d) => {
       const ym = getEntryYearMonth(d)
-      const dayStr = String(d.getDate())
+      const dayNum = d.getDate()
+      const dayStr = String(dayNum)
       counts[`${ym}-${dayStr}`] = staff.filter((s) => {
-        const entry = shifts[ym]?.[s.id]?.[dayStr]
-        if (!entry) return false
-        const p = patternMap[entry.patternId]
-        return p && !p.isOff
+        const slots = getDaySlots(shifts[ym]?.[s.id] ?? {}, dayNum)
+        return slots.some((slot) => {
+          const p = patternMap[slot.patternId]
+          return p && !p.isOff
+        })
       }).length
     })
     return counts
@@ -99,8 +102,8 @@ export default function ShiftPage() {
     if (totalCells === 0) return 0
     const filled = staff.reduce((acc, s) => {
       return acc + monthDays.filter((d) => {
-        const entry = shifts[yearMonth]?.[s.id]?.[String(d.getDate())]
-        return !!entry
+        const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d.getDate())
+        return slots.length > 0
       }).length
     }, 0)
     return Math.round((filled / totalCells) * 100)
@@ -165,11 +168,12 @@ export default function ShiftPage() {
     const prevYM = format(subMonths(parseISO(`${yearMonth}-01`), 1), 'yyyy-MM')
     monthDays.forEach((d) => {
       const dayStr = String(d.getDate())
+      const dayNum = d.getDate()
       staff.forEach((s) => {
-        const prevEntry = shifts[prevYM]?.[s.id]?.[dayStr]
-        if (prevEntry) {
-          setShiftEntry(yearMonth, s.id, dayStr, prevEntry)
-        }
+        const prevSlots = getDaySlots(shifts[prevYM]?.[s.id] ?? {}, dayNum)
+        prevSlots.forEach((slot) => {
+          setShiftEntry(yearMonth, s.id, dayStr, { patternId: slot.patternId, note: slot.note })
+        })
       })
     })
     setShowCopyConfirm(false)
@@ -560,10 +564,11 @@ export default function ShiftPage() {
               {staff.map((s, si) => {
                 const monthlyHours = monthDays.reduce((sum, d) => {
                   const ym = getEntryYearMonth(d)
-                  const entry = shifts[ym]?.[s.id]?.[String(d.getDate())]
-                  if (!entry) return sum
-                  const p = patternMap[entry.patternId]
-                  return sum + (p ? calcWorkHours(p) : 0)
+                  const slots = getDaySlots(shifts[ym]?.[s.id] ?? {}, d.getDate())
+                  return sum + slots.reduce((s2, slot) => {
+                    const p = patternMap[slot.patternId]
+                    return s2 + (p ? calcWorkHours(p) : 0)
+                  }, 0)
                 }, 0)
 
                 const expectedHours = s.weeklyHours * 4
@@ -613,8 +618,14 @@ export default function ShiftPage() {
                     {days.map((d) => {
                       const dayStr = String(d.getDate())
                       const ym = getEntryYearMonth(d)
-                      const entry = shifts[ym]?.[s.id]?.[dayStr]
-                      const pattern = entry ? patternMap[entry.patternId] : null
+                      const dayNum = d.getDate()
+                      const slots = getDaySlots(shifts[ym]?.[s.id] ?? {}, dayNum)
+                      const workSlots = slots.filter((slot) => {
+                        const p = patternMap[slot.patternId]
+                        return p && !p.isOff
+                      })
+                      const primarySlot = slots[0] ?? null
+                      const primaryPattern = primarySlot ? patternMap[primarySlot.patternId] : null
                       const isSaturday = d.getDay() === 6
                       const isSunday = d.getDay() === 0
 
@@ -624,14 +635,13 @@ export default function ShiftPage() {
                         selected?.day === `${ym}|${dayStr}`
 
                       // Leave request indicator
-                      const leaveKey = `${s.id}-${ym}-${dayStr.padStart(2, '0')}`
                       const leaveDate = `${ym}-${dayStr.padStart(2, '0')}`
                       const leaveLookupKey = `${s.id}-${leaveDate}`
                       const leave = leaveMap[leaveLookupKey]
 
                       // Column tint
                       let colBg = ''
-                      if (!pattern) {
+                      if (slots.length === 0) {
                         if (isSunday) colBg = 'bg-red-50/20'
                         else if (isSaturday) colBg = 'bg-sky-50/30'
                       }
@@ -641,25 +651,48 @@ export default function ShiftPage() {
 
                       return (
                         <td
-                          key={`${ym}-${dayStr}-${leaveKey}`}
+                          key={`${ym}-${dayStr}-${s.id}`}
                           onClick={() => handleCellClick(s.id, dayStr, ym)}
                           className={`text-center border-b border-gray-100 transition-colors select-none cursor-pointer active:opacity-60 ${colBg} ${
                             isSelected ? 'ring-2 ring-primary-400 ring-inset' : ''
                           } ${isQuickFillActive ? 'hover:bg-amber-50' : ''}`}
-                          style={{ padding: '5px 2px', height: 48 }}
+                          style={{ padding: '3px 2px', height: 48 }}
                         >
-                          {pattern ? (
+                          {workSlots.length > 0 ? (
+                            <div className="flex flex-col gap-0.5 items-center">
+                              {workSlots.map((slot) => {
+                                const p = patternMap[slot.patternId]
+                                if (!p) return null
+                                return (
+                                  <span
+                                    key={slot.slotKey}
+                                    className="inline-flex items-center justify-center w-full font-bold rounded-md"
+                                    style={{
+                                      backgroundColor: p.bgColor,
+                                      color: p.color,
+                                      fontSize: 10,
+                                      padding: '3px 2px',
+                                      minWidth: 34,
+                                    }}
+                                  >
+                                    {p.name}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          ) : primaryPattern ? (
+                            /* 休み・有給など isOff パターン */
                             <span
                               className="inline-flex items-center justify-center w-full font-bold rounded-md"
                               style={{
-                                backgroundColor: pattern.bgColor,
-                                color: pattern.color,
+                                backgroundColor: primaryPattern.bgColor,
+                                color: primaryPattern.color,
                                 fontSize: 10,
                                 padding: '4px 2px',
-                                minWidth: 38,
+                                minWidth: 34,
                               }}
                             >
-                              {pattern.name}
+                              {primaryPattern.name}
                             </span>
                           ) : leave?.status === 'pending' ? (
                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-300 mx-auto mt-1" title="休暇申請中" />
