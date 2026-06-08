@@ -26,6 +26,12 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
   } = useStore()
   const constraints = useStore((s) => s.staffConstraints) ?? {}
 
+  // 制約未設定の職員リスト
+  const unconfiguredStaff = useMemo(
+    () => staff.filter((s) => !constraints[s.id]),
+    [staff, constraints],
+  )
+
   const workPatterns = shiftPatterns.filter((p) => !p.isOff)
   const patternMap   = useMemo(() => Object.fromEntries(shiftPatterns.map((p) => [p.id, p])), [shiftPatterns])
 
@@ -171,6 +177,28 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
         {/* ── STEP 1: Settings ── */}
         {step === 1 && (
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+
+            {/* 動作説明バナー */}
+            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-2">
+              <p className="text-sm font-semibold text-sky-800">自動シフト作成について</p>
+              <ul className="text-xs text-sky-700 space-y-1 list-none">
+                <li>✅ 出勤可能曜日（職員ごとに設定）を自動で考慮します</li>
+                <li>✅ 管理職（管理者・主任）は早番・遅番には配置されません</li>
+                <li>✅ 休み希望日は除外されます</li>
+                <li className="text-amber-700">⚠️ 出勤条件が未設定の職員は平日（月〜金）のみに配置されます</li>
+              </ul>
+            </div>
+
+            {/* 制約未設定職員の警告 */}
+            {unconfiguredStaff.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <p className="text-xs text-amber-700">
+                  <span className="font-semibold">出勤条件未設定の職員がいます:</span>{' '}
+                  {unconfiguredStaff.map(s => s.name).join('、')}
+                  <br />平日（月〜金）のみに自動配置されます。詳細設定は「出勤条件」ページから行えます。
+                </p>
+              </div>
+            )}
 
             {/* Mode */}
             <div>
@@ -402,6 +430,11 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
               </div>
             </div>
 
+            {/* 配置数の補足説明 */}
+            <p className="text-[10px] text-gray-400 -mt-3">
+              ※ 配置人数は土日・休み希望日を除いた平日ベースで計算されています
+            </p>
+
             {/* Warnings */}
             {(result.stats.unfilledDays.length > 0 || result.stats.belowMinStaff.length > 0) && (
               <div className="space-y-2">
@@ -538,14 +571,23 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
         {/* Footer */}
         <div className="shrink-0 px-5 pt-3 pb-4 border-t border-gray-100 bg-white">
           {step === 1 ? (
-            <button
-              onClick={runGeneration}
-              disabled={totalTargetPerDay === 0}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-base bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-sm"
-            >
-              <Wand2 className="w-5 h-5" />
-              プレビューを生成する
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleClose}
+                className="flex items-center gap-1.5 px-4 py-3.5 rounded-2xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                閉じる
+              </button>
+              <button
+                onClick={runGeneration}
+                disabled={totalTargetPerDay === 0}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-base bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-sm"
+              >
+                <Wand2 className="w-5 h-5" />
+                プレビューを生成する
+              </button>
+            </div>
           ) : (
             <div className="flex gap-2">
               <button

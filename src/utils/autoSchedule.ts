@@ -151,7 +151,9 @@ export function autoGenerateShifts(
       if (c?.unavailableDates?.includes(dateStr)) return false
 
       // Day-of-week availability
-      if ((c?.availableDays?.length ?? 0) > 0 && !c!.availableDays.includes(dow)) return false
+      // 制約がない場合は平日のみ（月〜金）をデフォルトとして使用
+      const availDays = (c?.availableDays?.length ?? 0) > 0 ? c!.availableDays : [1, 2, 3, 4, 5]
+      if (!availDays.includes(dow)) return false
 
       // Max days per month
       const maxD = c?.maxDaysPerMonth ?? 31
@@ -176,7 +178,13 @@ export function autoGenerateShifts(
 
       // Candidates: prefer staff who have this pattern as preferred, then balance by days
       const candidates = eligible
-        .filter((s) => !assignedToday.has(s.id))
+        .filter((s) => {
+          if (assignedToday.has(s.id)) return false
+          const c = constraints[s.id]
+          // restrictedPatternIds に含まれるパターンは除外
+          if (c?.restrictedPatternIds?.includes(patternId)) return false
+          return true
+        })
         .map((s) => {
           const c = constraints[s.id]
           const currentWorkDays = workDayNums[s.id].size
