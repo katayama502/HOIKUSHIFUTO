@@ -1,6 +1,6 @@
 import type { Staff, ShiftPattern, ClassRoom, StaffConstraint, ShiftData } from '../types'
 import { AGE_RATIO } from '../types'
-import { getDaysArray } from './shift'
+import { getDaysArray, getDaySlots } from './shift'
 
 export type ViolationSeverity = 'error' | 'warning'
 
@@ -23,6 +23,7 @@ export interface ShiftViolation {
 
 /**
  * 指定月のシフト全体をバリデーションして違反一覧を返す。
+ * ※ スロットキーは複合形式 "15_ban3" のみサポート（getDaySlots 経由で参照）
  */
 export function validateMonth(
   yearMonth: string,
@@ -44,17 +45,23 @@ export function validateMonth(
 
   // ────────────────────────────────────────────
   // 1. 日ごとの配置人数チェック（人員不足）
+  //    ※ 誰も出勤していない日（土日・全員休暇等）はスキップ
   // ────────────────────────────────────────────
   for (const d of days) {
-    const dayStr = String(d.getDate())
+    const dayNum = d.getDate()
+    const dayStr = String(dayNum)
+
     const workingCount = staff.filter((s) => {
-      const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-      if (!entry) return false
-      const p = patternMap[entry.patternId]
-      return p != null && !p.isOff
+      const staffData = shifts[yearMonth]?.[s.id] ?? {}
+      const slots = getDaySlots(staffData, dayNum)
+      return slots.some((sl) => {
+        const p = patternMap[sl.patternId]
+        return p != null && !p.isOff
+      })
     }).length
 
-    if (workingCount < totalRequired) {
+    // 誰も出勤していない日（土日・全員休暇）は配置不足扱いしない
+    if (workingCount > 0 && workingCount < totalRequired) {
       violations.push({
         id: `understaffed-${yearMonth}-${dayStr}`,
         severity: 'error',
@@ -73,11 +80,17 @@ export function validateMonth(
     const constraint = constraints[s.id]
     const monthEntries = shifts[yearMonth]?.[s.id] ?? {}
 
-    // 実際に出勤しているエントリ（休みパターン除外）
-    const workingDayCount = Object.values(monthEntries).filter((entry) => {
+    // ユニークな出勤日数を集計（同日に複数スロットがあっても1日としてカウント）
+    // slotKey 形式: "15_ban3" → parseInt("15_ban3", 10) = 15
+    const workDaySet = new Set<number>()
+    for (const [slotKey, entry] of Object.entries(monthEntries)) {
       const p = patternMap[entry.patternId]
-      return p != null && !p.isOff
-    }).length
+      if (p && !p.isOff) {
+        const dayNum = parseInt(slotKey, 10)
+        if (!isNaN(dayNum)) workDaySet.add(dayNum)
+      }
+    }
+    const workingDayCount = workDaySet.size
 
     if (constraint) {
       // ── 月の最低出勤日数 ──
@@ -106,11 +119,15 @@ export function validateMonth(
 
       // ── 日ごとの詳細チェック（休み希望・曜日制限） ──
       for (const d of days) {
-        const dayStr = String(d.getDate())
-        const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-        if (!entry) continue
-        const p = patternMap[entry.patternId]
-        if (p == null || p.isOff) continue
+        const dayNum = d.getDate()
+        const dayStr = String(dayNum)
+        const staffData = shifts[yearMonth]?.[s.id] ?? {}
+        const slots = getDaySlots(staffData, dayNum)
+        const workSlots = slots.filter((sl) => {
+          const p = patternMap[sl.patternId]
+          return p != null && !p.isOff
+        })
+        if (workSlots.length === 0) continue
 
         // 休み希望日チェック
         const dateStr = `${yearMonth}-${dayStr.padStart(2, '0')}`
@@ -147,11 +164,14 @@ export function validateMonth(
       if (constraint.maxConsecutiveDays < 7) {
         let consecutive = 0
         let maxSeen = 0
+        const staffData = shifts[yearMonth]?.[s.id] ?? {}
         for (const d of days) {
-          const dayStr = String(d.getDate())
-          const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-          const p = entry ? patternMap[entry.patternId] : null
-          if (p != null && !p.isOff) {
+          const slots = getDaySlots(staffData, d.getDate())
+          const isWorking = slots.some((sl) => {
+            const p = patternMap[sl.patternId]
+            return p != null && !p.isOff
+          })
+          if (isWorking) {
             consecutive++
             maxSeen = Math.max(maxSeen, consecutive)
           } else {
