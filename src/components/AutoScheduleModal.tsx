@@ -182,10 +182,13 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
             <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-2">
               <p className="text-sm font-semibold text-sky-800">自動シフト作成について</p>
               <ul className="text-xs text-sky-700 space-y-1 list-none">
-                <li>✅ 出勤可能曜日（職員ごとに設定）を自動で考慮します</li>
-                <li>✅ 管理職（管理者・主任）は早番・遅番には配置されません</li>
+                <li>✅ 各職員の<strong className="text-sky-900">出勤条件（優先パターン・除外パターン）</strong>を自動で考慮します</li>
+                <li>✅ 固定時間職員（3番・4番など）は毎日その時間帯に配置されます</li>
+                <li>✅ ローテーション職員は番号シフトを均等にバランス配置します</li>
+                <li>✅ パート職員は午前P・半日・夕勤のみに配置されます</li>
+                <li>✅ 管理職は早1・早2には配置されません</li>
                 <li>✅ 休み希望日は除外されます</li>
-                <li className="text-amber-700">⚠️ 出勤条件が未設定の職員は平日（月〜金）のみに配置されます</li>
+                <li className="text-amber-700">⚠️ 出勤条件が未設定の職員は平日（月〜金）にのみ配置されます</li>
               </ul>
             </div>
 
@@ -350,9 +353,12 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
               </div>
 
               {totalTargetPerDay === 0 && (
-                <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                  <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">1日あたりの配置数を1以上設定してください</p>
+                <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-sky-50 border border-sky-200">
+                  <Info className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-sky-700">
+                    <span className="font-semibold">配置数が0のまま生成すると「条件ベース自動モード」になります。</span>
+                    各職員の出勤条件（優先パターン・除外パターン）を自動で読み取り、それぞれに最適なシフトを割り当てます。配置数を設定すれば人数の上限も調整できます。
+                  </p>
                 </div>
               )}
             </div>
@@ -581,11 +587,10 @@ export default function AutoScheduleModal({ open, yearMonth, onClose }: Props) {
               </button>
               <button
                 onClick={runGeneration}
-                disabled={totalTargetPerDay === 0}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-base bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer shadow-sm"
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-base bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-all cursor-pointer shadow-sm"
               >
                 <Wand2 className="w-5 h-5" />
-                プレビューを生成する
+                {totalTargetPerDay === 0 ? '条件ベースで自動生成' : 'プレビューを生成する'}
               </button>
             </div>
           ) : (
