@@ -74,7 +74,10 @@ const defaultPatterns: ShiftPattern[] = [
   { id: 'ban6',   name: '6番',   startTime: '08:45', endTime: '17:45', color: '#b45309', bgColor: '#fef3c7', isOff: false },
   { id: 'osoi1',  name: '遅1',   startTime: '09:00', endTime: '18:00', color: '#dc2626', bgColor: '#fee2e2', isOff: false },
   { id: 'shu2',   name: '週2',   startTime: '09:00', endTime: '18:00', color: '#7c3aed', bgColor: '#f5f3ff', isOff: false },
-  // ── 短時間・固定シフト ────────────────────────────────────────────────
+  // ── 固定時間職員専用シフト（写真の固定欄より）────────────────────────
+  { id: 'oishi_ban',    name: '大石番',  startTime: '08:15', endTime: '17:15', color: '#22c55e', bgColor: '#f0fdf4', isOff: false },
+  { id: 'murakami_ban', name: '村上番',  startTime: '08:30', endTime: '16:30', color: '#0891b2', bgColor: '#ecfeff', isOff: false },
+  // ── 短時間・パートシフト ─────────────────────────────────────────────
   { id: 'gozanP', name: '午前P', startTime: '08:30', endTime: '13:30', color: '#8b5cf6', bgColor: '#ede9fe', isOff: false },
   { id: 'hanichi',name: '半日',  startTime: '08:00', endTime: '14:00', color: '#2dd4bf', bgColor: '#ccfbf1', isOff: false },
   { id: 'yugata', name: '夕勤',  startTime: '15:00', endTime: '18:00', color: '#db2777', bgColor: '#fce7f3', isOff: false },
@@ -120,48 +123,144 @@ const defaultStaff: Staff[] = [
   { id: 'nakao',     name: '中尾',  role: 'admin',   employment: 'fulltime', weeklyHours: 40, color: '#6d28d9', note: '理事長 8:30〜17:30' },
 ]
 
+// ローテーション職員が使えないシフト（固定・パート専用）
+const ROTATION_RESTRICTED = ['oishi_ban', 'murakami_ban', 'gozanP', 'hanichi', 'yugata'] as const
+// 固定時間職員が使えないシフト（ローテーション＋他固定）
+const FIXED_BASE = ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2'] as const
+const mkFixedRestricted = (...keep: string[]) =>
+  [...FIXED_BASE, 'oishi_ban', 'murakami_ban', 'gozanP', 'hanichi', 'yugata'].filter(p => !keep.includes(p))
+
 const defaultConstraints: Record<string, StaffConstraint> = {
-  // 理事長：早1・早2は除外、4番（8:30〜17:30）優先
-  nakao: {
-    staffId: 'nakao',
-    availableDays: [1, 2, 3, 4, 5],
-    unavailableDates: [],
-    minDaysPerMonth: 0,
-    maxDaysPerMonth: 23,
-    preferredPatternIds: ['ban4'],
-    maxConsecutiveDays: 5,
-    restrictedPatternIds: ['hayai1', 'hayai2'],
+  // ── ローテーション職員（早1〜遅1・週2 で平日ローテーション） ─────────────
+  watanabe: {
+    staffId: 'watanabe', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
   },
-  // 短時間パート：担当シフトのみ
+  iwasaki: {
+    staffId: 'iwasaki', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  matsuzaki: {
+    staffId: 'matsuzaki', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  hama: {
+    staffId: 'hama', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  takuno: {
+    staffId: 'takuno', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  oka: {
+    staffId: 'oka', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  kushizaki: {
+    staffId: 'kushizaki', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  sasao: {
+    staffId: 'sasao', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  nagahara: {
+    staffId: 'nagahara', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
+  },
+  // ── 固定時間職員（写真の固定欄：毎日同じ時間帯） ────────────────────────
+  // 大石 8:15〜17:15（専用パターン）
+  oishi: {
+    staffId: 'oishi', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['oishi_ban'], restrictedPatternIds: mkFixedRestricted('oishi_ban'),
+  },
+  // 村田 8:30〜17:30 → 4番と同じ時間
+  murata: {
+    staffId: 'murata', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban4'], restrictedPatternIds: mkFixedRestricted('ban4'),
+  },
+  // 宮鶴 8:00〜17:00 → 3番と同じ時間
+  miyatsuru: {
+    staffId: 'miyatsuru', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // 増野 8:00〜17:00 → 3番と同じ時間
+  masuno: {
+    staffId: 'masuno', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // 大本 8:30〜17:30 → 4番と同じ時間
+  omoto: {
+    staffId: 'omoto', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban4'], restrictedPatternIds: mkFixedRestricted('ban4'),
+  },
+  // 村上 8:30〜16:30（専用パターン）
+  murakami: {
+    staffId: 'murakami', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['murakami_ban'], restrictedPatternIds: mkFixedRestricted('murakami_ban'),
+  },
+  // 山縣 8:00〜17:00 → 3番と同じ時間
+  yamagata: {
+    staffId: 'yamagata', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // 長島 8:00〜17:00 → 3番と同じ時間
+  nagashima: {
+    staffId: 'nagashima', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // 辻 8:00〜17:00 → 3番と同じ時間（固定）
+  tsuji: {
+    staffId: 'tsuji', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // ── 短時間パート職員（担当シフトのみ） ────────────────────────────────
+  // 金谷 8:30〜13:30（午前P）
   kanetani: {
-    staffId: 'kanetani',
-    availableDays: [1, 2, 3, 4, 5],
-    unavailableDates: [],
-    minDaysPerMonth: 0,
-    maxDaysPerMonth: 23,
+    staffId: 'kanetani', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['gozanP'],
-    maxConsecutiveDays: 5,
-    restrictedPatternIds: ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'yugata'],
+    restrictedPatternIds: [...FIXED_BASE, 'oishi_ban', 'murakami_ban', 'hanichi', 'yugata'],
   },
+  // 堀野 8:00〜14:00（半日）
   horino: {
-    staffId: 'horino',
-    availableDays: [1, 2, 3, 4, 5],
-    unavailableDates: [],
-    minDaysPerMonth: 0,
-    maxDaysPerMonth: 23,
+    staffId: 'horino', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['hanichi'],
-    maxConsecutiveDays: 5,
-    restrictedPatternIds: ['hayai1', 'hayai2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'yugata', 'gozanP'],
+    restrictedPatternIds: [...FIXED_BASE, 'oishi_ban', 'murakami_ban', 'gozanP', 'yugata'],
   },
+  // 松井 15:00〜18:00（夕勤）
   matsui: {
-    staffId: 'matsui',
-    availableDays: [1, 2, 3, 4, 5],
-    unavailableDates: [],
-    minDaysPerMonth: 0,
-    maxDaysPerMonth: 23,
+    staffId: 'matsui', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['yugata'],
-    maxConsecutiveDays: 5,
-    restrictedPatternIds: ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'gozanP', 'hanichi'],
+    restrictedPatternIds: [...FIXED_BASE, 'oishi_ban', 'murakami_ban', 'gozanP', 'hanichi'],
+  },
+  // ── 管理職（保育士ではない括り）─────────────────────────────────────
+  // 中尾 理事長 8:30〜17:30：早1・早2は除外、4番優先
+  nakao: {
+    staffId: 'nakao', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban4'],
+    restrictedPatternIds: ['hayai1', 'hayai2', 'oishi_ban', 'murakami_ban', 'gozanP', 'hanichi', 'yugata'],
   },
 }
 
