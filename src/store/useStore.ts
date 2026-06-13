@@ -43,6 +43,8 @@ interface AppState {
   staffConstraints: Record<string, StaffConstraint>
   setStaffConstraint: (staffId: string, constraint: Partial<StaffConstraint>) => void
   removeStaffConstraint: (staffId: string) => void
+
+  resetToDefaults: () => void
 }
 
 const defaultUISettings: UISettings = {
@@ -62,14 +64,23 @@ const defaultUISettings: UISettings = {
 }
 
 const defaultPatterns: ShiftPattern[] = [
-  { id: 'early',  name: '早番', startTime: '07:00', endTime: '16:00', color: '#0ea5e9', bgColor: '#e0f2fe', isOff: false },
-  { id: 'middle', name: '中番', startTime: '09:00', endTime: '18:00', color: '#16a34a', bgColor: '#dcfce7', isOff: false },
-  { id: 'late',   name: '遅番', startTime: '11:00', endTime: '20:00', color: '#ea580c', bgColor: '#ffedd5', isOff: false },
-  { id: 'normal', name: '通常', startTime: '08:30', endTime: '17:30', color: '#6b7280', bgColor: '#f3f4f6', isOff: false },
-  { id: 'ampart', name: '午前P', startTime: '08:30', endTime: '12:30', color: '#8b5cf6', bgColor: '#ede9fe', isOff: false },
-  { id: 'pmpart', name: '午後P', startTime: '13:30', endTime: '17:30', color: '#d946ef', bgColor: '#fae8ff', isOff: false },
-  { id: 'off',    name: '休み', startTime: '', endTime: '', color: '#ef4444', bgColor: '#fee2e2', isOff: true },
-  { id: 'paid',   name: '有給', startTime: '', endTime: '', color: '#7c3aed', bgColor: '#ede9fe', isOff: true },
+  // ── 番号制シフト（写真の勤務体系表より）─────────────────────────────────
+  { id: 'hayai1', name: '早1',   startTime: '06:50', endTime: '15:50', color: '#0369a1', bgColor: '#dbeafe', isOff: false },
+  { id: 'hayai2', name: '早2',   startTime: '07:00', endTime: '16:00', color: '#2563eb', bgColor: '#eff6ff', isOff: false },
+  { id: 'ban2',   name: '2番',   startTime: '07:30', endTime: '16:30', color: '#0284c7', bgColor: '#e0f2fe', isOff: false },
+  { id: 'ban3',   name: '3番',   startTime: '08:00', endTime: '17:00', color: '#16a34a', bgColor: '#dcfce7', isOff: false },
+  { id: 'ban4',   name: '4番',   startTime: '08:30', endTime: '17:30', color: '#15803d', bgColor: '#f0fdf4', isOff: false },
+  { id: 'ban5',   name: '5番',   startTime: '08:45', endTime: '17:45', color: '#d97706', bgColor: '#fffbeb', isOff: false },
+  { id: 'ban6',   name: '6番',   startTime: '08:45', endTime: '17:45', color: '#b45309', bgColor: '#fef3c7', isOff: false },
+  { id: 'osoi1',  name: '遅1',   startTime: '09:00', endTime: '18:00', color: '#dc2626', bgColor: '#fee2e2', isOff: false },
+  { id: 'shu2',   name: '週2',   startTime: '09:00', endTime: '18:00', color: '#7c3aed', bgColor: '#f5f3ff', isOff: false },
+  // ── 短時間・固定シフト ────────────────────────────────────────────────
+  { id: 'gozanP', name: '午前P', startTime: '08:30', endTime: '13:30', color: '#8b5cf6', bgColor: '#ede9fe', isOff: false },
+  { id: 'hanichi',name: '半日',  startTime: '08:00', endTime: '14:00', color: '#2dd4bf', bgColor: '#ccfbf1', isOff: false },
+  { id: 'yugata', name: '夕勤',  startTime: '15:00', endTime: '18:00', color: '#db2777', bgColor: '#fce7f3', isOff: false },
+  // ── 休暇 ─────────────────────────────────────────────────────────────
+  { id: 'off',    name: '休み',  startTime: '', endTime: '', color: '#ef4444', bgColor: '#fee2e2', isOff: true },
+  { id: 'paid',   name: '有給',  startTime: '', endTime: '', color: '#6d28d9', bgColor: '#ede9fe', isOff: true },
 ]
 
 const defaultClassRooms: ClassRoom[] = [
@@ -81,15 +92,78 @@ const defaultClassRooms: ClassRoom[] = [
   { id: 'c5', name: '5歳児クラス', ageGroup: 5, childrenCount: 20 },
 ]
 
-const defaultConstraints: Record<string, StaffConstraint> = {}
-
+// ── ローテーション職員（番号シフトで回す保育士） ──────────────────────────
 const defaultStaff: Staff[] = [
-  { id: 's1', name: '田中 花子', role: 'admin',  employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '主任' },
-  { id: 's2', name: '鈴木 一郎', role: 'staff',  employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '' },
-  { id: 's3', name: '山田 美咲', role: 'staff',  employment: 'fulltime', weeklyHours: 40, color: '#a78bfa', note: '' },
-  { id: 's4', name: '佐藤 ゆり', role: 'staff',  employment: 'parttime', weeklyHours: 20, color: '#34d399', note: '火・木のみ' },
-  { id: 's5', name: '高橋 さくら', role: 'staff', employment: 'parttime', weeklyHours: 25, color: '#60a5fa', note: '' },
+  { id: 'watanabe',  name: '渡辺',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '' },
+  { id: 'iwasaki',   name: '岩崎',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '' },
+  { id: 'matsuzaki', name: '松崎',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#a78bfa', note: '' },
+  { id: 'hama',      name: '濱',    role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#34d399', note: '' },
+  { id: 'takuno',    name: '宅野',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#60a5fa', note: '' },
+  { id: 'oka',       name: '岡',    role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fbbf24', note: '' },
+  { id: 'kushizaki', name: '串崎',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f87171', note: '' },
+  { id: 'sasao',     name: '笹尾',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#2dd4bf', note: '' },
+  { id: 'nagahara',  name: '長原',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#818cf8', note: '' },
+  // ── 固定時間職員 ────────────────────────────────────────────────────
+  { id: 'oishi',     name: '大石',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#4ade80', note: '8:15〜17:15' },
+  { id: 'murata',    name: '村田',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '8:30〜17:30' },
+  { id: 'miyatsuru', name: '宮鶴',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '8:00〜17:00' },
+  { id: 'masuno',    name: '増野',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#a78bfa', note: '8:00〜17:00' },
+  { id: 'omoto',     name: '大本',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#34d399', note: '8:30〜17:30' },
+  { id: 'murakami',  name: '村上',  role: 'staff',   employment: 'parttime', weeklyHours: 35, color: '#60a5fa', note: '8:30〜16:30' },
+  { id: 'yamagata',  name: '山縣',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fbbf24', note: '8:00〜17:00' },
+  { id: 'nagashima', name: '長島',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f87171', note: '8:00〜17:00' },
+  { id: 'kanetani',  name: '金谷',  role: 'staff',   employment: 'parttime', weeklyHours: 25, color: '#2dd4bf', note: '8:30〜13:30' },
+  { id: 'horino',    name: '堀野',  role: 'staff',   employment: 'parttime', weeklyHours: 30, color: '#818cf8', note: '8:00〜14:00' },
+  { id: 'matsui',    name: '松井',  role: 'staff',   employment: 'parttime', weeklyHours: 15, color: '#4ade80', note: '15:00〜18:00' },
+  { id: 'tsuji',     name: '辻',    role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '8:00〜17:00' },
+  // ── 管理職（保育士ではない括り） ─────────────────────────────────────
+  { id: 'nakao',     name: '中尾',  role: 'admin',   employment: 'fulltime', weeklyHours: 40, color: '#6d28d9', note: '理事長 8:30〜17:30' },
 ]
+
+const defaultConstraints: Record<string, StaffConstraint> = {
+  // 理事長：早1・早2は除外、4番（8:30〜17:30）優先
+  nakao: {
+    staffId: 'nakao',
+    availableDays: [1, 2, 3, 4, 5],
+    unavailableDates: [],
+    minDaysPerMonth: 0,
+    maxDaysPerMonth: 23,
+    preferredPatternIds: ['ban4'],
+    maxConsecutiveDays: 5,
+    restrictedPatternIds: ['hayai1', 'hayai2'],
+  },
+  // 短時間パート：担当シフトのみ
+  kanetani: {
+    staffId: 'kanetani',
+    availableDays: [1, 2, 3, 4, 5],
+    unavailableDates: [],
+    minDaysPerMonth: 0,
+    maxDaysPerMonth: 23,
+    preferredPatternIds: ['gozanP'],
+    maxConsecutiveDays: 5,
+    restrictedPatternIds: ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'yugata'],
+  },
+  horino: {
+    staffId: 'horino',
+    availableDays: [1, 2, 3, 4, 5],
+    unavailableDates: [],
+    minDaysPerMonth: 0,
+    maxDaysPerMonth: 23,
+    preferredPatternIds: ['hanichi'],
+    maxConsecutiveDays: 5,
+    restrictedPatternIds: ['hayai1', 'hayai2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'yugata', 'gozanP'],
+  },
+  matsui: {
+    staffId: 'matsui',
+    availableDays: [1, 2, 3, 4, 5],
+    unavailableDates: [],
+    minDaysPerMonth: 0,
+    maxDaysPerMonth: 23,
+    preferredPatternIds: ['yugata'],
+    maxConsecutiveDays: 5,
+    restrictedPatternIds: ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2', 'gozanP', 'hanichi'],
+  },
+}
 
 export const useStore = create<AppState>()(
   persist(
@@ -229,6 +303,14 @@ export const useStore = create<AppState>()(
         const next = { ...state.staffConstraints }
         delete next[staffId]
         return { staffConstraints: next }
+      }),
+
+      resetToDefaults: () => set({
+        shiftPatterns: defaultPatterns,
+        staff: defaultStaff,
+        staffConstraints: defaultConstraints,
+        shifts: {},
+        leaveRequests: [],
       }),
     }),
     { name: 'hoiku-shift-store' }

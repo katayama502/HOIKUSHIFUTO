@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Save, Plus, Trash2, Pencil, Palette, ChevronUp, ChevronDown, Printer, FileText } from 'lucide-react'
+import { Save, Plus, Trash2, Pencil, Palette, ChevronUp, ChevronDown, Printer, FileText, RotateCcw, AlertTriangle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { ClassRoom, ShiftPattern } from '../types'
 import { AGE_RATIO } from '../types'
@@ -39,6 +39,7 @@ export default function SettingsPage() {
     classRooms, addClassRoom, updateClassRoom, deleteClassRoom,
     shiftPatterns, addShiftPattern, updateShiftPattern, deleteShiftPattern,
     uiSettings, updateUISettings,
+    resetToDefaults,
   } = useStore()
 
   const [orgForm, setOrgForm] = useState(orgSettings)
@@ -55,6 +56,7 @@ export default function SettingsPage() {
   })
 
   const [customizePanelOpen, setCustomizePanelOpen] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   // Print/Export settings (local UI state, persisted via uiSettings extension approach)
   // We store printOrientation and printSummary in uiSettings if available, else local
@@ -448,6 +450,54 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-400 mt-2">※ UTF-8は標準的なエンコードで、多くのソフトウェアで対応しています</p>
           )}
         </div>
+      </section>
+
+      {/* ══ データ初期化 ══ */}
+      <section className="card space-y-4">
+        <div className="flex items-center gap-2">
+          <RotateCcw className="w-4 h-4 text-orange-500" />
+          <h2 className="font-bold text-gray-800">データを初期化する</h2>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1">
+          <p className="text-sm font-semibold text-amber-800">初期化すると以下がリセットされます</p>
+          <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
+            <li>シフトパターン → 番号制（早1・早2・2番〜6番・遅1・週2 等）</li>
+            <li>職員一覧 → 写真の勤務体系表の職員（渡辺・岩崎・松崎・濱・宅野・岡・串崎・笹尾・長原・大石・村田・宮鶴・増野・大本・村上・山縣・長島・金谷・堀野・松井・辻・中尾）</li>
+            <li>出勤条件 → 各職員のデフォルト設定（中尾理事長は早番除外）</li>
+            <li>入力済みシフト・有給データ → すべて削除</li>
+          </ul>
+          <p className="text-xs text-red-600 font-semibold mt-2">※ この操作は取り消せません</p>
+        </div>
+        {!showResetConfirm ? (
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 active:scale-95 transition-all text-sm font-semibold w-full justify-center"
+          >
+            <RotateCcw className="w-4 h-4" />
+            初期データを適用する（リセット）
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">本当に初期化しますか？ 入力済みシフトを含む全データが削除されます。</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 hover:bg-gray-100 active:scale-95 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => { resetToDefaults(); setShowResetConfirm(false) }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 active:scale-95 transition-all"
+              >
+                初期化する
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* UICustomizePanel */}
