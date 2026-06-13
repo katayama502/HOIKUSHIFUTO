@@ -171,49 +171,97 @@ export function autoGenerateShifts(
       return true
     })
 
-    // Fill each pattern slot (early → middle → late order as defined in targets)
-    for (const target of activeTargets) {
-      const patternId = target.patternId
-      let remaining = target.targetCount
+    if (activeTargets.length === 0) {
+      // ── 条件ベースモード（1日あたりの配置数が未設定の場合）─────────────────
+      // 各職員の制約を直接読み取り、それぞれに最適なパターンを割り当てる
+      const workPatternsList = patterns.filter(p => !p.isOff)
+      const patternCountsToday: Record<string, number> = {}
 
-      // Candidates: prefer staff who have this pattern as preferred, then balance by days
-      const candidates = eligible
-        .filter((s) => {
-          if (assignedToday.has(s.id)) return false
-          const c = constraints[s.id]
-          // restrictedPatternIds に含まれるパターンは除外
-          if (c?.restrictedPatternIds?.includes(patternId)) return false
-          return true
-        })
-        .map((s) => {
-          const c = constraints[s.id]
-          const currentWorkDays = workDayNums[s.id].size
-          const minDays = c?.minDaysPerMonth ?? 0
-          const prefersThis = c?.preferredPatternIds?.includes(patternId) ?? false
-          const needsMoreDays = currentWorkDays < minDays
-          // 前月の実績パターンと一致するか（希望未設定の場合に有効）
-          const prevPattern = prevMonthPatterns?.[s.id]
-          const matchesPrev = !!prevPattern && prevPattern === patternId && !prefersThis
+      // minDaysPerMonth 未達の人を先に処理するため、ニーズ順にソート
+      const prioritized = [...eligible].sort((a, b) => {
+        const ca = constraints[a.id], cb = constraints[b.id]
+        const needA = (ca?.minDaysPerMonth ?? 0) - workDayNums[a.id].size
+        const needB = (cb?.minDaysPerMonth ?? 0) - workDayNums[b.id].size
+        return needB - needA  // 不足が多い人を優先
+      })
 
-          // Score: higher → chosen first
-          let score = 0
-          if (prefersThis) score += 200            // 希望パターン最優先
-          else if (matchesPrev) score += 150        // 前月実績（希望未設定時）
-          if (needsMoreDays) score += 100 + (minDays - currentWorkDays) * 10
-          score -= currentWorkDays * 3  // fewer days so far → higher priority
-          return { s, score }
-        })
-        .sort((a, b) => b.score - a.score)
-
-      for (const { s } of candidates) {
-        if (remaining <= 0) break
+      for (const s of prioritized) {
         if (assignedToday.has(s.id)) continue
+        const c = constraints[s.id]
+        const restricted = new Set(c?.restrictedPatternIds ?? [])
+        const prefs = c?.preferredPatternIds ?? []
+
+        let chosenPattern: string | null = null
+
+        if (prefs.length > 0) {
+          // 優先パターンあり（固定時間・パート職員）→ 先頭の優先パターンをそのまま使用
+          chosenPattern = prefs[0]
+        } else {
+          // 優先パターンなし（ローテーション職員）→ 本日の配置数が少ないパターンを優先
+          const available = workPatternsList
+            .filter(p => !restricted.has(p.id))
+            .sort((a, b) => (patternCountsToday[a.id] ?? 0) - (patternCountsToday[b.id] ?? 0))
+          if (available.length > 0) {
+            // 前月実績パターンが利用可能なら優先的に採用
+            const prev = prevMonthPatterns?.[s.id]
+            const prevAvail = prev ? available.find(p => p.id === prev) : undefined
+            chosenPattern = prevAvail ? prevAvail.id : available[0].id
+          }
+        }
+
+        if (!chosenPattern) continue
 
         if (!monthShifts[s.id]) monthShifts[s.id] = {}
-        monthShifts[s.id][`${dayStr}_${patternId}`] = { patternId, note: '' }
+        monthShifts[s.id][`${dayStr}_${chosenPattern}`] = { patternId: chosenPattern, note: '' }
         workDayNums[s.id].add(d)
         assignedToday.add(s.id)
-        remaining--
+        patternCountsToday[chosenPattern] = (patternCountsToday[chosenPattern] ?? 0) + 1
+      }
+    } else {
+      // ── ターゲットベースモード（1日あたりの配置数が設定されている場合）────────
+      for (const target of activeTargets) {
+        const patternId = target.patternId
+        let remaining = target.targetCount
+
+        // Candidates: prefer staff who have this pattern as preferred, then balance by days
+        const candidates = eligible
+          .filter((s) => {
+            if (assignedToday.has(s.id)) return false
+            const c = constraints[s.id]
+            // restrictedPatternIds に含まれるパターンは除外
+            if (c?.restrictedPatternIds?.includes(patternId)) return false
+            return true
+          })
+          .map((s) => {
+            const c = constraints[s.id]
+            const currentWorkDays = workDayNums[s.id].size
+            const minDays = c?.minDaysPerMonth ?? 0
+            const prefersThis = c?.preferredPatternIds?.includes(patternId) ?? false
+            const needsMoreDays = currentWorkDays < minDays
+            // 前月の実績パターンと一致するか（希望未設定の場合に有効）
+            const prevPattern = prevMonthPatterns?.[s.id]
+            const matchesPrev = !!prevPattern && prevPattern === patternId && !prefersThis
+
+            // Score: higher → chosen first
+            let score = 0
+            if (prefersThis) score += 200            // 希望パターン最優先
+            else if (matchesPrev) score += 150        // 前月実績（希望未設定時）
+            if (needsMoreDays) score += 100 + (minDays - currentWorkDays) * 10
+            score -= currentWorkDays * 3  // fewer days so far → higher priority
+            return { s, score }
+          })
+          .sort((a, b) => b.score - a.score)
+
+        for (const { s } of candidates) {
+          if (remaining <= 0) break
+          if (assignedToday.has(s.id)) continue
+
+          if (!monthShifts[s.id]) monthShifts[s.id] = {}
+          monthShifts[s.id][`${dayStr}_${patternId}`] = { patternId, note: '' }
+          workDayNums[s.id].add(d)
+          assignedToday.add(s.id)
+          remaining--
+        }
       }
     }
 
