@@ -188,7 +188,15 @@ export default function StaffConstraintPage() {
     if (type === 'fulltime') {
       setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 20, maxDaysPerMonth: 23, maxConsecutiveDays: 5, restrictedPatternIds: [] }))
     } else if (type === 'manager') {
-      setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 20, maxDaysPerMonth: 23, maxConsecutiveDays: 5, restrictedPatternIds: ['early', 'late'] }))
+      // 管理者は原則クラス非介入（欠員時のみ手動で介入）→ 全パターンを自動配置から除外
+      setForm((prev) => ({
+        ...prev,
+        availableDays: [1, 2, 3, 4, 5],
+        minDaysPerMonth: 0,
+        maxDaysPerMonth: 0,
+        maxConsecutiveDays: 5,
+        restrictedPatternIds: shiftPatterns.filter((p) => !p.isOff).map((p) => p.id),
+      }))
     } else if (type === 'parttime') {
       const suggested = Math.round((selectedStaff.weeklyHours / 8) * 4)
       setForm((prev) => ({ ...prev, availableDays: [1, 2, 3, 4, 5], minDaysPerMonth: 0, maxDaysPerMonth: suggested + 2, maxConsecutiveDays: 3, restrictedPatternIds: [] }))

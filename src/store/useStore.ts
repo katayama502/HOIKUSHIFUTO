@@ -64,20 +64,21 @@ const defaultUISettings: UISettings = {
 }
 
 const defaultPatterns: ShiftPattern[] = [
-  // ── 番号制シフト（写真の勤務体系表より）─────────────────────────────────
+  // ── 保育番手（早1〜遅2 の7枠。4番のみ3名体制、遅1/遅2は各1名だが実態2名体制）──
   { id: 'hayai1', name: '早1',   startTime: '06:50', endTime: '15:50', color: '#0369a1', bgColor: '#dbeafe', isOff: false },
   { id: 'hayai2', name: '早2',   startTime: '07:00', endTime: '16:00', color: '#2563eb', bgColor: '#eff6ff', isOff: false },
   { id: 'ban2',   name: '2番',   startTime: '07:30', endTime: '16:30', color: '#0284c7', bgColor: '#e0f2fe', isOff: false },
   { id: 'ban3',   name: '3番',   startTime: '08:00', endTime: '17:00', color: '#16a34a', bgColor: '#dcfce7', isOff: false },
-  { id: 'ban4',   name: '4番',   startTime: '08:30', endTime: '17:30', color: '#15803d', bgColor: '#f0fdf4', isOff: false },
-  { id: 'ban5',   name: '5番',   startTime: '08:45', endTime: '17:45', color: '#d97706', bgColor: '#fffbeb', isOff: false },
-  { id: 'ban6',   name: '6番',   startTime: '08:45', endTime: '17:45', color: '#b45309', bgColor: '#fef3c7', isOff: false },
+  { id: 'ban4',   name: '4番',   startTime: '08:45', endTime: '17:45', color: '#15803d', bgColor: '#f0fdf4', isOff: false },
   { id: 'osoi1',  name: '遅1',   startTime: '09:00', endTime: '18:00', color: '#dc2626', bgColor: '#fee2e2', isOff: false },
-  { id: 'shu2',   name: '週2',   startTime: '09:00', endTime: '18:00', color: '#7c3aed', bgColor: '#f5f3ff', isOff: false },
-  // ── 短時間・パートシフト ─────────────────────────────────────────────
-  { id: 'gozanP', name: '午前P', startTime: '08:30', endTime: '13:30', color: '#8b5cf6', bgColor: '#ede9fe', isOff: false },
-  { id: 'hanichi',name: '半日',  startTime: '08:00', endTime: '14:00', color: '#2dd4bf', bgColor: '#ccfbf1', isOff: false },
-  { id: 'yugata', name: '夕勤',  startTime: '15:00', endTime: '18:00', color: '#db2777', bgColor: '#fce7f3', isOff: false },
+  { id: 'osoi2',  name: '遅2',   startTime: '09:00', endTime: '18:00', color: '#b91c1c', bgColor: '#fecaca', isOff: false },
+  // ── 固定枠（非保育）───────────────────────────────────────────────────
+  { id: 'kango',       name: '看護師',       startTime: '08:15', endTime: '17:15', color: '#0891b2', bgColor: '#cffafe', isOff: false },
+  { id: 'kyushoku',    name: '給食',         startTime: '08:00', endTime: '17:00', color: '#c2410c', bgColor: '#ffedd5', isOff: false },
+  { id: 'kyushokuSub', name: '給食(代替)',   startTime: '08:30', endTime: '17:30', color: '#ea580c', bgColor: '#fff7ed', isOff: false },
+  { id: 'kyushokuP',   name: '給食(短時間)', startTime: '08:30', endTime: '13:30', color: '#f97316', bgColor: '#fff7ed', isOff: false },
+  { id: 'gakudo',      name: '学童',         startTime: '15:00', endTime: '18:00', color: '#7c3aed', bgColor: '#ede9fe', isOff: false },
+  { id: 'jimugakudo',  name: '事務+学童',    startTime: '08:30', endTime: '17:30', color: '#6d28d9', bgColor: '#ede9fe', isOff: false },
   // ── 休暇 ─────────────────────────────────────────────────────────────
   { id: 'off',    name: '休み',  startTime: '', endTime: '', color: '#ef4444', bgColor: '#fee2e2', isOff: true },
   { id: 'paid',   name: '有給',  startTime: '', endTime: '', color: '#6d28d9', bgColor: '#ede9fe', isOff: true },
@@ -92,7 +93,7 @@ const defaultClassRooms: ClassRoom[] = [
   { id: 'c5', name: '5歳児クラス', ageGroup: 5, childrenCount: 20 },
 ]
 
-// ── ローテーション職員（番号シフトで回す保育士） ──────────────────────────
+// ── ローテーション職員（早1〜遅2 の7枠を平日ローテーションで回す保育士） ─────
 const defaultStaff: Staff[] = [
   { id: 'watanabe',  name: '渡辺',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '' },
   { id: 'iwasaki',   name: '岩崎',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '' },
@@ -103,32 +104,50 @@ const defaultStaff: Staff[] = [
   { id: 'kushizaki', name: '串崎',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f87171', note: '' },
   { id: 'sasao',     name: '笹尾',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#2dd4bf', note: '' },
   { id: 'nagahara',  name: '長原',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#818cf8', note: '' },
-  // ── 固定時間職員 ────────────────────────────────────────────────────
-  { id: 'oishi',     name: '大石',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#4ade80', note: '8:15〜17:15' },
-  { id: 'murata',    name: '村田',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '8:30〜17:30' },
-  { id: 'miyatsuru', name: '宮鶴',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f472b6', note: '8:00〜17:00' },
-  { id: 'masuno',    name: '増野',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#a78bfa', note: '8:00〜17:00' },
-  { id: 'omoto',     name: '大本',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#34d399', note: '8:30〜17:30' },
-  { id: 'murakami',  name: '村上',  role: 'staff',   employment: 'parttime', weeklyHours: 35, color: '#60a5fa', note: '8:30〜16:30' },
-  { id: 'yamagata',  name: '山縣',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fbbf24', note: '8:00〜17:00' },
-  { id: 'nagashima', name: '長島',  role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#f87171', note: '8:00〜17:00' },
-  { id: 'kanetani',  name: '金谷',  role: 'staff',   employment: 'parttime', weeklyHours: 25, color: '#2dd4bf', note: '8:30〜13:30' },
-  { id: 'horino',    name: '堀野',  role: 'staff',   employment: 'parttime', weeklyHours: 30, color: '#818cf8', note: '8:00〜14:00' },
-  { id: 'matsui',    name: '松井',  role: 'staff',   employment: 'parttime', weeklyHours: 15, color: '#4ade80', note: '15:00〜18:00' },
-  { id: 'tsuji',     name: '辻',    role: 'staff',   employment: 'fulltime', weeklyHours: 40, color: '#fb923c', note: '8:00〜17:00' },
-  // ── 管理職（保育士ではない括り） ─────────────────────────────────────
-  { id: 'nakao',     name: '中尾',  role: 'admin',   employment: 'fulltime', weeklyHours: 40, color: '#6d28d9', note: '理事長 8:30〜17:30' },
+
+  // ── 管理者（先生/園長格）：原則クラス非介入、欠員時のみ手動で介入 ────────
+  { id: 'encho', name: '園長', role: 'manager', employment: 'fulltime', weeklyHours: 40, color: '#94a3b8', note: '管理者。原則クラス非介入、欠員時のみ介入' },
+
+  // ── 固定枠（非保育） ──────────────────────────────────────────────────
+  { id: 'oishi',     name: '大石', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#0891b2', note: '看護師。毎日 8:15〜17:15（階段枠外）' },
+  { id: 'nagashima', name: '長嶋', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#c2410c', note: '給食（正規）8:00〜17:00' },
+  { id: 'yamagata',  name: '山形', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#ea580c', note: '給食（正規）8:30〜17:30。長嶋休み時の代替' },
+  { id: 'kanetani',  name: '金谷', role: 'staff', employment: 'parttime', weeklyHours: 25, color: '#f97316', note: '給食（パート）8:30〜13:30。一人専任は避ける運用' },
+  { id: 'horino',    name: '堀野', role: 'staff', employment: 'parttime', weeklyHours: 15, color: '#fb923c', note: '給食ピンチヒッター 8:30〜13:30 or 11:00〜14:00' },
+  { id: 'matsui',    name: '松井', role: 'staff', employment: 'parttime', weeklyHours: 15, color: '#7c3aed', note: '学童 15:00〜18:00（主に平日）' },
+  { id: 'nakao',     name: '中尾', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#6d28d9', note: '事務+学童 8:30〜17:30（土曜は不出勤）' },
+
+  // ── 保育パート/正規（代表） ───────────────────────────────────────────
+  { id: 'murata',    name: '村田', role: 'staff', employment: 'parttime', weeklyHours: 30, color: '#4ade80', note: '保育パート 8:30〜17:30（曜日制限なし）' },
+  { id: 'saito',     name: '斉藤', role: 'staff', employment: 'parttime', weeklyHours: 35, color: '#f472b6', note: '保育 8:00〜16:00（平日中心、土曜は弱い）' },
+  { id: 'washino',   name: '鷲野', role: 'staff', employment: 'parttime', weeklyHours: 40, color: '#a78bfa', note: '保育パート 8:00〜17:00' },
+  { id: 'omoto',     name: '大本', role: 'staff', employment: 'parttime', weeklyHours: 40, color: '#34d399', note: '保育パート 8:30〜17:30' },
+  { id: 'murakami',  name: '村上', role: 'staff', employment: 'parttime', weeklyHours: 35, color: '#60a5fa', note: '保育 8:30〜16:30（月金中心、土曜は稀）' },
+
+  // ── その他の固定時間職員（棚卸し対象外・既存データを保持） ──────────────
+  { id: 'miyatsuru', name: '宮鶴', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#fbbf24', note: '8:00〜17:00' },
+  { id: 'masuno',    name: '増野', role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#f87171', note: '8:00〜17:00' },
+  { id: 'tsuji',     name: '辻',   role: 'staff', employment: 'fulltime', weeklyHours: 40, color: '#2dd4bf', note: '8:00〜17:00' },
 ]
 
-// ローテーション職員が使えないシフト（パート専用）
-const ROTATION_RESTRICTED = ['gozanP', 'hanichi', 'yugata'] as const
-// 固定時間職員が使えないシフト（ローテーション＋パート）
-const FIXED_BASE = ['hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'ban5', 'ban6', 'osoi1', 'shu2'] as const
+// 保育番手（7枠）と固定枠（非保育）を合わせた、通常勤務で使いうる全パターン
+const ALL_WORK_PATTERN_IDS = [
+  'hayai1', 'hayai2', 'ban2', 'ban3', 'ban4', 'osoi1', 'osoi2',
+  'kango', 'kyushoku', 'kyushokuSub', 'kyushokuP', 'gakudo', 'jimugakudo',
+] as const
+// 固定枠（非保育：看護師・給食・学童）
+const FIXED_ROLE_IDS = ['kango', 'kyushoku', 'kyushokuSub', 'kyushokuP', 'gakudo', 'jimugakudo'] as const
+
+// ローテーション職員は固定枠（非保育）業務には入らない
+const ROTATION_RESTRICTED = [...FIXED_ROLE_IDS]
+// 固定枠・代表パート/正規職員は自分の担当パターン以外に自動配置されない
 const mkFixedRestricted = (...keep: string[]) =>
-  [...FIXED_BASE, 'gozanP', 'hanichi', 'yugata'].filter(p => !keep.includes(p))
+  ALL_WORK_PATTERN_IDS.filter((p) => !keep.includes(p))
+// 管理者は原則すべての保育番手・固定枠から除外（欠員時のみ手動で個別に割り当てる）
+const MANAGER_RESTRICTED = [...ALL_WORK_PATTERN_IDS]
 
 const defaultConstraints: Record<string, StaffConstraint> = {
-  // ── ローテーション職員（早1〜遅1・週2 で平日ローテーション） ─────────────
+  // ── ローテーション職員（早1〜遅2 で平日ローテーション） ─────────────────
   watanabe: {
     staffId: 'watanabe', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
@@ -174,90 +193,105 @@ const defaultConstraints: Record<string, StaffConstraint> = {
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: [], restrictedPatternIds: [...ROTATION_RESTRICTED],
   },
-  // ── 固定時間職員（写真の固定欄：毎日同じ時間帯） ────────────────────────
-  // 大石 8:15〜17:15 → 最近似の4番（8:30〜17:30）を使用
+
+  // ── 管理者（先生/園長格）：原則クラス非介入、欠員時のみ手動で介入 ────────
+  encho: {
+    staffId: 'encho', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 0, maxDaysPerMonth: 0, maxConsecutiveDays: 5,
+    preferredPatternIds: [], restrictedPatternIds: [...MANAGER_RESTRICTED],
+  },
+
+  // ── 固定枠（非保育）：看護師・給食・学童 ─────────────────────────────
+  // 大石 看護師 8:15〜17:15（毎日、階段枠外）
   oishi: {
-    staffId: 'oishi', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['ban4'], restrictedPatternIds: mkFixedRestricted('ban4'),
+    staffId: 'oishi', availableDays: [1,2,3,4,5,6], unavailableDates: [],
+    minDaysPerMonth: 20, maxDaysPerMonth: 26, maxConsecutiveDays: 6,
+    preferredPatternIds: ['kango'], restrictedPatternIds: mkFixedRestricted('kango'),
   },
-  // 村田 8:30〜17:30 → 4番と同じ時間
+  // 長嶋 給食（正規）8:00〜17:00
+  nagashima: {
+    staffId: 'nagashima', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['kyushoku'], restrictedPatternIds: mkFixedRestricted('kyushoku'),
+  },
+  // 山形 給食（正規）8:30〜17:30、長嶋休み時の代替
+  yamagata: {
+    staffId: 'yamagata', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['kyushokuSub'], restrictedPatternIds: mkFixedRestricted('kyushokuSub'),
+  },
+  // 金谷 給食（パート）8:30〜13:30。一人専任は避ける運用
+  kanetani: {
+    staffId: 'kanetani', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['kyushokuP'], restrictedPatternIds: mkFixedRestricted('kyushokuP'),
+  },
+  // 堀野 給食ピンチヒッター 8:30〜13:30 or 11:00〜14:00
+  horino: {
+    staffId: 'horino', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 8, maxDaysPerMonth: 20, maxConsecutiveDays: 5,
+    preferredPatternIds: ['kyushokuP'], restrictedPatternIds: mkFixedRestricted('kyushokuP'),
+  },
+  // 松井 学童 15:00〜18:00（主に平日）
+  matsui: {
+    staffId: 'matsui', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['gakudo'], restrictedPatternIds: mkFixedRestricted('gakudo'),
+  },
+  // 中尾 事務+学童 8:30〜17:30（土曜は不出勤）
+  nakao: {
+    staffId: 'nakao', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['jimugakudo'], restrictedPatternIds: mkFixedRestricted('jimugakudo'),
+  },
+
+  // ── 保育パート/正規（代表）：最も近い保育番手を担当 ──────────────────
+  // 村田 8:30〜17:30（パート、曜日制限なし）→ 4番と近い時間
   murata: {
-    staffId: 'murata', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    staffId: 'murata', availableDays: [0,1,2,3,4,5,6], unavailableDates: [],
+    minDaysPerMonth: 12, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban4'], restrictedPatternIds: mkFixedRestricted('ban4'),
   },
-  // 宮鶴 8:00〜17:00 → 3番と同じ時間
-  miyatsuru: {
-    staffId: 'miyatsuru', availableDays: [1,2,3,4,5], unavailableDates: [],
+  // 斉藤 8:00〜16:00（平日中心、土曜は弱い）→ 3番と近い時間
+  saito: {
+    staffId: 'saito', availableDays: [1,2,3,4,5], unavailableDates: [],
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
+  },
+  // 鷲野 8:00〜17:00（パート）→ 3番と同じ時間
+  washino: {
+    staffId: 'washino', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
   },
-  // 増野 8:00〜17:00 → 3番と同じ時間
-  masuno: {
-    staffId: 'masuno', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
-  },
-  // 大本 8:30〜17:30 → 4番と同じ時間
+  // 大本 8:30〜17:30（パート）→ 4番と近い時間
   omoto: {
     staffId: 'omoto', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban4'], restrictedPatternIds: mkFixedRestricted('ban4'),
   },
-  // 村上 8:30〜16:30 → 最近似の2番（7:30〜16:30）を使用
+  // 村上 8:30〜16:30（月金中心、土曜は稀）→ 2番と近い時間
   murakami: {
     staffId: 'murakami', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
+    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban2'], restrictedPatternIds: mkFixedRestricted('ban2'),
   },
-  // 山縣 8:00〜17:00 → 3番と同じ時間
-  yamagata: {
-    staffId: 'yamagata', availableDays: [1,2,3,4,5], unavailableDates: [],
+
+  // ── その他の固定時間職員（棚卸し対象外・既存データを保持） ──────────────
+  miyatsuru: {
+    staffId: 'miyatsuru', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
   },
-  // 長島 8:00〜17:00 → 3番と同じ時間
-  nagashima: {
-    staffId: 'nagashima', availableDays: [1,2,3,4,5], unavailableDates: [],
+  masuno: {
+    staffId: 'masuno', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
   },
-  // 辻 8:00〜17:00 → 3番と同じ時間（固定）
   tsuji: {
     staffId: 'tsuji', availableDays: [1,2,3,4,5], unavailableDates: [],
     minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
     preferredPatternIds: ['ban3'], restrictedPatternIds: mkFixedRestricted('ban3'),
-  },
-  // ── 短時間パート職員（担当シフトのみ） ────────────────────────────────
-  // 金谷 8:30〜13:30（午前P）
-  kanetani: {
-    staffId: 'kanetani', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['gozanP'],
-    restrictedPatternIds: [...FIXED_BASE, 'hanichi', 'yugata'],
-  },
-  // 堀野 8:00〜14:00（半日）
-  horino: {
-    staffId: 'horino', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['hanichi'],
-    restrictedPatternIds: [...FIXED_BASE, 'gozanP', 'yugata'],
-  },
-  // 松井 15:00〜18:00（夕勤）
-  matsui: {
-    staffId: 'matsui', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 15, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['yugata'],
-    restrictedPatternIds: [...FIXED_BASE, 'gozanP', 'hanichi'],
-  },
-  // ── 管理職（保育士ではない括り）─────────────────────────────────────
-  // 中尾 理事長 8:30〜17:30：早1・早2は除外、4番優先
-  nakao: {
-    staffId: 'nakao', availableDays: [1,2,3,4,5], unavailableDates: [],
-    minDaysPerMonth: 18, maxDaysPerMonth: 23, maxConsecutiveDays: 5,
-    preferredPatternIds: ['ban4'],
-    restrictedPatternIds: ['hayai1', 'hayai2', 'gozanP', 'hanichi', 'yugata'],
   },
 }
 
@@ -285,9 +319,9 @@ export const useStore = create<AppState>()(
       updateUISettings: (s) => set((state) => ({ uiSettings: { ...state.uiSettings, ...s } })),
 
       addStaff: (s) => set((state) => {
-        // ロールに基づくデフォルトの制約パターン除外
+        // 管理者（先生/園長格）は原則クラス非介入 → 全パターンを自動配置から除外
         const restrictedPatternIds = (s.role === 'admin' || s.role === 'manager')
-          ? ['early', 'late']  // 管理職は早番・遅番の自動配置から除外
+          ? state.shiftPatterns.filter((p) => !p.isOff).map((p) => p.id)
           : []
 
         const defaultConstraint: StaffConstraint = {
@@ -409,6 +443,6 @@ export const useStore = create<AppState>()(
         leaveRequests: [],
       }),
     }),
-    { name: 'hoiku-shift-store' }
+    { name: 'hoiku-shift-store-v2' }
   )
 )
