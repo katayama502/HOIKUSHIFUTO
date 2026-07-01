@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'staff'
+export type Role = 'admin' | 'manager' | 'staff'
 export type Employment = 'fulltime' | 'parttime'
 
 export interface Staff {
@@ -66,3 +66,26 @@ export const STAFF_COLORS = [
   '#fb923c', '#f472b6', '#a78bfa', '#34d399', '#60a5fa',
   '#fbbf24', '#f87171', '#2dd4bf', '#818cf8', '#4ade80',
 ]
+
+export type DashboardCardId = 'stats' | 'today' | 'progress' | 'hours' | 'quickActions' | 'calendar'
+export interface DashboardCard { id: DashboardCardId; visible: boolean }
+
+export interface UISettings {
+  theme: 'warm' | 'cool' | 'green' | 'purple'
+  density: 'compact' | 'normal' | 'spacious'
+  fontSize: 'small' | 'medium' | 'large'
+  showWeekends: boolean
+  sidebarCollapsed: boolean
+  dashboardCards: DashboardCard[]
+}
+
+export interface StaffConstraint {
+  staffId: string
+  availableDays: number[]       // 0=日,1=月,...,6=土 (出勤可能な曜日)
+  unavailableDates: string[]    // YYYY-MM-DD 形式の出勤不可日（休み希望など）
+  minDaysPerMonth: number       // 月の最低出勤日数（0=制限なし）
+  maxDaysPerMonth: number       // 月の最大出勤日数（31=制限なし）
+  preferredPatternIds: string[] // 希望するシフトパターンID一覧
+  maxConsecutiveDays: number    // 最大連続勤務日数（デフォルト5）
+  restrictedPatternIds: string[] // 自動配置から除外するシフトパターンID
+}

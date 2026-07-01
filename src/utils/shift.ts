@@ -1,6 +1,23 @@
-import { getDaysInMonth, parseISO, format } from 'date-fns'
+import { getDaysInMonth, parseISO, format, startOfWeek, addDays } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import type { ShiftPattern } from '../types'
+import type { ShiftPattern, ShiftEntry, Staff, ShiftData } from '../types'
+
+// ── Slot key helpers ─────────────────────────────────────────────────────────
+// Slot keys: "${day}_${patternId}" (e.g. "15_early") — or legacy just "${day}".
+// parseInt("15_early", 10) === 15, parseInt("15", 10) === 15  ✓
+
+export function getSlotDay(slotKey: string): number {
+  return parseInt(slotKey, 10)
+}
+
+export function getDaySlots(
+  staffData: Record<string, ShiftEntry>,
+  dayNum: number,
+): Array<{ slotKey: string } & ShiftEntry> {
+  return Object.entries(staffData)
+    .filter(([k]) => parseInt(k, 10) === dayNum)
+    .map(([slotKey, entry]) => ({ slotKey, ...entry }))
+}
 
 export function calcWorkHours(pattern: ShiftPattern): number {
   if (pattern.isOff || !pattern.startTime || !pattern.endTime) return 0
@@ -22,6 +39,11 @@ export function getDaysArray(yearMonth: string): Date[] {
     d.setDate(i + 1)
     return d
   })
+}
+
+export function getWeekDays(anchorDate: Date): Date[] {
+  const start = startOfWeek(anchorDate, { weekStartsOn: 1 }) // Monday start
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i))
 }
 
 export function formatDayHeader(date: Date): { day: string; dayOfWeek: string; isWeekend: boolean; isSunday: boolean } {
@@ -46,4 +68,121 @@ export function calcMonthlyHours(
     const p = patternMap[entry.patternId]
     return sum + (p ? calcWorkHours(p) : 0)
   }, 0)
+}
+
+// -----------------------------------------------------------------------
+// CSV / Export utilities
+// -----------------------------------------------------------------------
+
+/**
+ * Generate CSV content for the shift table.
+ * Columns: 職員名, 1日, 2日, ..., N日, 合計時間
+ * Each cell shows the pattern name or blank.
+ */
+export function generateShiftCSV(
+  yearMonth: string,
+  staffList: Staff[],
+  days: Date[],
+  shifts: ShiftData,
+  patterns: ShiftPattern[]
+): string {
+  const patternMap = Object.fromEntries(patterns.map((p) => [p.id, p]))
+  const [year, month] = yearMonth.split('-')
+  const title = `${year}年${Number(month)}月 シフト表`
+
+  // Header row
+  const headerCols = ['職員名', ...days.map((d) => `${d.getDate()}日`), '合計時間']
+  const rows: string[][] = [
+    [title],
+    headerCols,
+  ]
+
+  // Data rows
+  for (const s of staffList) {
+    let totalHours = 0
+    const cells: string[] = [s.name]
+    for (const d of days) {
+      const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d.getDate())
+      const patterns = slots.map((sl) => patternMap[sl.patternId]).filter(Boolean) as ShiftPattern[]
+      if (patterns.length > 0) {
+        cells.push(patterns.map((p) => p.name).join('/'))
+        totalHours += patterns.reduce((sum, p) => sum + calcWorkHours(p), 0)
+      } else {
+        cells.push('')
+      }
+    }
+    cells.push(`${totalHours.toFixed(0)}h`)
+    rows.push(cells)
+  }
+
+  // Placement count row
+  const placementRow: string[] = ['配置数']
+  for (const d of days) {
+    const count = staffList.filter((s) => {
+      const slots = getDaySlots(shifts[yearMonth]?.[s.id] ?? {}, d.getDate())
+      return slots.some((sl) => { const p = patternMap[sl.patternId]; return p && !p.isOff })
+    }).length
+    placementRow.push(String(count))
+  }
+  placementRow.push('')
+  rows.push(placementRow)
+
+  return rows
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n')
+}
+
+/**
+ * Generate CSV with UTF-8 BOM for Excel compatibility.
+ * Same structure as generateShiftCSV but prepends \uFEFF.
+ */
+export function generateShiftExcel(
+  yearMonth: string,
+  staffList: Staff[],
+  days: Date[],
+  shifts: ShiftData,
+  patterns: ShiftPattern[]
+): string {
+  return '\uFEFF' + generateShiftCSV(yearMonth, staffList, days, shifts, patterns)
+}
+
+/**
+ * Trigger a file download from a string content.
+ */
+export function downloadFile(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Get a plain-text summary of staff monthly hours (used for debugging/print caption).
+ */
+export function getShiftSummaryText(
+  yearMonth: string,
+  staffList: Staff[],
+  shifts: ShiftData,
+  patterns: ShiftPattern[]
+): string {
+  const patternMap = Object.fromEntries(patterns.map((p) => [p.id, p]))
+  const [year, month] = yearMonth.split('-')
+  const lines: string[] = [`${year}年${Number(month)}月 勤務時間サマリー`, '']
+  for (const s of staffList) {
+    const monthData = shifts[yearMonth]?.[s.id] ?? {}
+    const totalHours = Object.values(monthData).reduce((sum, entry) => {
+      const p = patternMap[entry.patternId]
+      return sum + (p ? calcWorkHours(p) : 0)
+    }, 0)
+    const uniqueWorkDays = new Set(
+      Object.entries(monthData)
+        .filter(([, e]) => { const p = patternMap[e.patternId]; return p && !p.isOff })
+        .map(([k]) => parseInt(k, 10))
+    ).size
+    lines.push(`${s.name}: ${uniqueWorkDays}日 / ${totalHours.toFixed(1)}h`)
+  }
+  return lines.join('\n')
 }
