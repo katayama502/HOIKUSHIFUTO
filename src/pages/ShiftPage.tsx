@@ -1,14 +1,13 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, X, Info } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Info } from 'lucide-react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { useStore } from '../store/useStore'
 import { getYearMonth, getDaysArray, formatDayHeader, calcWorkHours } from '../utils/shift'
-import { AGE_RATIO } from '../types'
 
 export default function ShiftPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const { staff, shiftPatterns, shifts, classRooms, setShiftEntry, clearShiftEntry, currentRole, currentStaffId } = useStore()
+  const { staff, shiftPatterns, shifts, setShiftEntry, clearShiftEntry, currentRole, currentStaffId } = useStore()
   const yearMonth = getYearMonth(currentDate)
   const days = getDaysArray(yearMonth)
   const patternMap = useMemo(() => Object.fromEntries(shiftPatterns.map((p) => [p.id, p])), [shiftPatterns])
@@ -17,32 +16,6 @@ export default function ShiftPage() {
   const [legendOpen, setLegendOpen] = useState(false)
 
   const isAdmin = currentRole === 'admin'
-
-  const placementAlerts = useMemo(() => {
-    const alerts: Record<string, boolean> = {}
-    days.forEach((d) => {
-      const dayStr = String(d.getDate())
-      const workingCount = staff.filter((s) => {
-        const entry = shifts[yearMonth]?.[s.id]?.[dayStr]
-        if (!entry) return false
-        const p = patternMap[entry.patternId]
-        return p && !p.isOff
-      }).length
-      const totalRequired = classRooms.reduce((sum, cr) => {
-        const ratio = AGE_RATIO[cr.ageGroup] ?? 6
-        return sum + Math.ceil(cr.childrenCount / ratio)
-      }, 0)
-      alerts[dayStr] = workingCount < totalRequired
-    })
-    return alerts
-  }, [days, staff, shifts, yearMonth, classRooms, patternMap])
-
-  const totalRequired = classRooms.reduce((sum, cr) => {
-    const ratio = AGE_RATIO[cr.ageGroup] ?? 6
-    return sum + Math.ceil(cr.childrenCount / ratio)
-  }, 0)
-
-  const hasAlert = Object.values(placementAlerts).some(Boolean)
   const displayStaff = isAdmin ? staff : staff.filter((s) => s.id === currentStaffId)
 
   function handleCellClick(staffId: string, day: string) {
@@ -94,18 +67,6 @@ export default function ShiftPage() {
         </div>
       </div>
 
-      {/* 配置基準バナー */}
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm border ${hasAlert ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-        {hasAlert
-          ? <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-          : <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-        }
-        <span className="text-gray-700 text-xs leading-snug flex-1">
-          必要人数 <strong>{totalRequired}名/日</strong>
-          {hasAlert ? ' — ⚠️ 不足している日があります' : ' — すべての日で基準をクリア'}
-        </span>
-      </div>
-
       {/* 凡例 (折りたたみ) */}
       <div>
         <button
@@ -146,19 +107,16 @@ export default function ShiftPage() {
                 {days.map((d) => {
                   const { day, dayOfWeek, isWeekend, isSunday } = formatDayHeader(d)
                   const dayStr = String(d.getDate())
-                  const alert = placementAlerts[dayStr]
                   return (
                     <th
                       key={dayStr}
                       className={`text-center py-2 font-medium w-[44px] min-w-[44px]
                         ${isSunday ? 'text-red-400' : isWeekend ? 'text-blue-400' : 'text-gray-500'}
-                        ${alert ? 'bg-amber-50' : ''}
                       `}
                       style={{ fontSize: 11 }}
                     >
                       <div>{day}</div>
                       <div className="text-gray-400 font-normal">{dayOfWeek}</div>
-                      {alert && <div className="text-amber-400 leading-none">▲</div>}
                     </th>
                   )
                 })}
