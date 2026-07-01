@@ -63,6 +63,24 @@ export function buildPrevMonthPatternMap(
   return result
 }
 
+// ─── Helper: 階段ローテーション（時間帯順で1つ後ろの番手）─────────────────────
+// 「前の日が早1なら次の日は早2」のように、渡された候補パターンを開始時刻順に
+// 並べ、直近勤務パターンの次（末尾なら先頭へ循環）を返す。
+// 直近勤務パターンが候補内に見つからない場合は undefined（呼び出し側でフォールバック）。
+function getStaircaseNextPattern(
+  candidates: ShiftPattern[],
+  lastPatternId: string | undefined,
+): string | undefined {
+  if (!lastPatternId || candidates.length === 0) return undefined
+
+  const ordered = [...candidates].sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const lastIdx = ordered.findIndex((p) => p.id === lastPatternId)
+  if (lastIdx === -1) return undefined
+
+  const nextIdx = (lastIdx + 1) % ordered.length
+  return ordered[nextIdx].id
+}
+
 export function autoGenerateShifts(
   yearMonth: string,
   mode: AutoScheduleMode,
@@ -117,6 +135,11 @@ export function autoGenerateShifts(
   // Active pattern targets (skip zero-count entries)
   const activeTargets = patternTargets.filter((t) => t.targetCount > 0)
 
+  // ── 階段ローテーション用: staffId → 直近の勤務日に割り当てたパターンID ──────
+  // （前日が「早1」なら翌日は「早2」…のように、時間帯順で1つずつ後ろへずらす）
+  // 前月実績の主要パターンを初期値として引き継ぎ、月をまたいでも階段が途切れないようにする
+  const lastAssignedPattern: Record<string, string> = { ...(prevMonthPatterns ?? {}) }
+
   // ── Day-by-day assignment ───────────────────────────────────────────────────
 
   const unfilledDays: number[] = []
@@ -132,12 +155,16 @@ export function autoGenerateShifts(
     if (mode === 'fill') {
       for (const s of staff) {
         const staffSlots = monthShifts[s.id] ?? {}
-        const hasWorkToday = Object.entries(staffSlots).some(([k, e]) => {
+        const todayWorkEntry = Object.entries(staffSlots).find(([k, e]) => {
           if (getSlotDay(k) !== d) return false
           const p = patternMap[e.patternId]
           return p && !p.isOff
         })
-        if (hasWorkToday) assignedToday.add(s.id)
+        if (todayWorkEntry) {
+          assignedToday.add(s.id)
+          // 既存の割り当てでも階段の基準日として引き継ぐ
+          lastAssignedPattern[s.id] = todayWorkEntry[1].patternId
+        }
       }
     }
 
@@ -171,10 +198,11 @@ export function autoGenerateShifts(
       return true
     })
 
+    const workPatternsList = patterns.filter(p => !p.isOff)
+
     if (activeTargets.length === 0) {
       // ── 条件ベースモード（1日あたりの配置数が未設定の場合）─────────────────
       // 各職員の制約を直接読み取り、それぞれに最適なパターンを割り当てる
-      const workPatternsList = patterns.filter(p => !p.isOff)
       const patternCountsToday: Record<string, number> = {}
 
       // minDaysPerMonth 未達の人を先に処理するため、ニーズ順にソート
@@ -197,15 +225,20 @@ export function autoGenerateShifts(
           // 優先パターンあり（固定時間・パート職員）→ 先頭の優先パターンをそのまま使用
           chosenPattern = prefs[0]
         } else {
-          // 優先パターンなし（ローテーション職員）→ 本日の配置数が少ないパターンを優先
+          // 優先パターンなし（ローテーション職員）→ 階段式（前回勤務日の次の番手）を優先
           const available = workPatternsList
             .filter(p => !restricted.has(p.id))
             .sort((a, b) => (patternCountsToday[a.id] ?? 0) - (patternCountsToday[b.id] ?? 0))
           if (available.length > 0) {
-            // 前月実績パターンが利用可能なら優先的に採用
-            const prev = prevMonthPatterns?.[s.id]
-            const prevAvail = prev ? available.find(p => p.id === prev) : undefined
-            chosenPattern = prevAvail ? prevAvail.id : available[0].id
+            const staircaseNext = getStaircaseNextPattern(available, lastAssignedPattern[s.id])
+            if (staircaseNext) {
+              chosenPattern = staircaseNext
+            } else {
+              // 階段の基準がない（初回など）→ 前月実績パターンがあれば優先採用
+              const prev = prevMonthPatterns?.[s.id]
+              const prevAvail = prev ? available.find(p => p.id === prev) : undefined
+              chosenPattern = prevAvail ? prevAvail.id : available[0].id
+            }
           }
         }
 
@@ -216,6 +249,7 @@ export function autoGenerateShifts(
         workDayNums[s.id].add(d)
         assignedToday.add(s.id)
         patternCountsToday[chosenPattern] = (patternCountsToday[chosenPattern] ?? 0) + 1
+        lastAssignedPattern[s.id] = chosenPattern
       }
     } else {
       // ── ターゲットベースモード（1日あたりの配置数が設定されている場合）────────
@@ -241,11 +275,19 @@ export function autoGenerateShifts(
             // 前月の実績パターンと一致するか（希望未設定の場合に有効）
             const prevPattern = prevMonthPatterns?.[s.id]
             const matchesPrev = !!prevPattern && prevPattern === patternId && !prefersThis
+            // 階段式：前回勤務日の次の番手と一致するか（希望未設定の場合に有効）
+            const restrictedForS = new Set(c?.restrictedPatternIds ?? [])
+            const staircaseAvailable = workPatternsList.filter(p => !restrictedForS.has(p.id))
+            const staircaseNext = !prefersThis
+              ? getStaircaseNextPattern(staircaseAvailable, lastAssignedPattern[s.id])
+              : undefined
+            const matchesStaircase = staircaseNext === patternId
 
             // Score: higher → chosen first
             let score = 0
-            if (prefersThis) score += 200            // 希望パターン最優先
-            else if (matchesPrev) score += 150        // 前月実績（希望未設定時）
+            if (prefersThis) score += 200             // 希望パターン最優先
+            else if (matchesStaircase) score += 180    // 階段式ローテーション（希望未設定時）
+            else if (matchesPrev) score += 150         // 前月実績（希望・階段未設定時）
             if (needsMoreDays) score += 100 + (minDays - currentWorkDays) * 10
             score -= currentWorkDays * 3  // fewer days so far → higher priority
             return { s, score }
@@ -260,6 +302,7 @@ export function autoGenerateShifts(
           monthShifts[s.id][`${dayStr}_${patternId}`] = { patternId, note: '' }
           workDayNums[s.id].add(d)
           assignedToday.add(s.id)
+          lastAssignedPattern[s.id] = patternId
           remaining--
         }
       }
